@@ -16,6 +16,12 @@ export interface Animation {
   frames: PixelBuffer[]   // 1–24 frames
 }
 
+export interface Guide {
+  id: string
+  axis: 'h' | 'v'
+  position: number  // canvas pixels: 0–(CANVAS_W-1) for v, 0–(CANVAS_H-1) for h
+}
+
 // Supabase row
 export interface Drawing {
   id: string

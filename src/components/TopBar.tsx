@@ -1,11 +1,15 @@
-import React, { useRef } from 'react'
+import { useRef } from 'react'
 import { ToolId, BloomSettings, PixelBuffer } from '../types'
 import { downloadSVG, downloadFramesSVGZip, importSVG } from '../lib/svg'
 import { exportAnimatedGIF, exportPNG } from '../lib/gif'
 
+const ERASER_SIZES = [1, 2, 4, 8] as const
+
 interface TopBarProps {
   tool: ToolId
   setTool: (t: ToolId) => void
+  eraserSize: 1 | 2 | 4 | 8
+  setEraserSize: (s: 1 | 2 | 4 | 8) => void
   bloom: BloomSettings
   setBloom: (b: BloomSettings) => void
   showGrid: boolean
@@ -21,6 +25,7 @@ interface TopBarProps {
   onImportFrame: (buf: PixelBuffer) => void
   onNew: () => void
   onOpenLibrary: () => void
+  onAddGuide: (axis: 'h' | 'v') => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
 }
@@ -28,6 +33,8 @@ interface TopBarProps {
 export function TopBar({
   tool,
   setTool,
+  eraserSize,
+  setEraserSize,
   bloom,
   setBloom,
   showGrid,
@@ -43,6 +50,7 @@ export function TopBar({
   onImportFrame,
   onNew,
   onOpenLibrary,
+  onAddGuide,
   pixelsCanvasRef,
   bloomCanvasRef,
 }: TopBarProps) {
@@ -86,7 +94,7 @@ export function TopBar({
 
   return (
     <div className="topbar">
-      {/* Row 1: tools + undo/redo + grid + bloom */}
+      {/* Row 1: tools + undo/redo + toggles + bloom + guides */}
       <div className="topbar-row">
         <div className="topbar-group">
           <button
@@ -99,6 +107,18 @@ export function TopBar({
             onClick={() => setTool('eraser')}
             title="Eraser (E)"
           >E</button>
+          {tool === 'eraser' && (
+            <span className="eraser-sizes">
+              {ERASER_SIZES.map(s => (
+                <button
+                  key={s}
+                  className={eraserSize === s ? 'active' : ''}
+                  onClick={() => setEraserSize(s)}
+                  title={`Eraser size ${s}×${s}`}
+                >{s}</button>
+              ))}
+            </span>
+          )}
         </div>
 
         <div className="topbar-group">
@@ -117,6 +137,11 @@ export function TopBar({
             onClick={() => setOnionEnabled(!onionEnabled)}
             title="Toggle onion skinning (O)"
           >O</button>
+        </div>
+
+        <div className="topbar-group">
+          <button onClick={() => onAddGuide('h')} title="Add horizontal guide">H Guide</button>
+          <button onClick={() => onAddGuide('v')} title="Add vertical guide">V Guide</button>
         </div>
 
         <div className="topbar-group topbar-bloom">

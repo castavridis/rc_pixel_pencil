@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PixelBuffer, ToolId, BloomSettings, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
+import { PixelBuffer, ToolId, BloomSettings, Guide, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
 import { debouncedSave, loadFromIndexedDB } from '../lib/storage'
 
 function blankFrame(): PixelBuffer {
@@ -16,6 +16,7 @@ export function useAppState() {
   const [frames, setFramesState] = useState<PixelBuffer[]>([blankFrame()])
   const [currentFrame, setCurrentFrame] = useState(0)
   const [tool, setTool] = useState<ToolId>('pencil')
+  const [eraserSize, setEraserSize] = useState<1 | 2 | 4 | 8>(1)
   const [bloom, setBloom] = useState<BloomSettings>(DEFAULT_BLOOM)
   const [zoom, setZoomState] = useState(10)
   const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -23,12 +24,12 @@ export function useAppState() {
   const [onionEnabled, setOnionEnabled] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [guides, setGuides] = useState<Guide[]>([])
 
   const framesRef = useRef(frames)
   const currentFrameRef = useRef(currentFrame)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Sync refs
   useEffect(() => { framesRef.current = frames }, [frames])
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
 
@@ -136,12 +137,31 @@ export function useAppState() {
     setPan(p => ({ x: p.x + dx, y: p.y + dy }))
   }, [])
 
+  // Guide operations
+  const addGuide = useCallback((axis: 'h' | 'v') => {
+    setGuides(g => [...g, {
+      id: crypto.randomUUID(),
+      axis,
+      position: axis === 'v' ? Math.floor(CANVAS_W / 2) : Math.floor(CANVAS_H / 2),
+    }])
+  }, [])
+
+  const moveGuide = useCallback((id: string, position: number) => {
+    setGuides(g => g.map(x => x.id === id ? { ...x, position } : x))
+  }, [])
+
+  const deleteGuide = useCallback((id: string) => {
+    setGuides(g => g.filter(x => x.id !== id))
+  }, [])
+
   return {
     frames,
     currentFrame,
     setCurrentFrame,
     tool,
     setTool,
+    eraserSize,
+    setEraserSize,
     bloom,
     setBloom,
     zoom,
@@ -158,6 +178,10 @@ export function useAppState() {
     togglePlay,
     stopPlay,
     isLoaded,
+    guides,
+    addGuide,
+    moveGuide,
+    deleteGuide,
     // Frame ops
     addFrame,
     deleteFrame,

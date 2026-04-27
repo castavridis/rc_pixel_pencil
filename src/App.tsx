@@ -29,6 +29,10 @@ export default function App() {
     zoom: state.zoom,
     pan: state.pan,
     isPlaying: state.isPlaying,
+    eraserSize: state.eraserSize,
+    guides: state.guides,
+    onMoveGuide: state.moveGuide,
+    onDeleteGuide: state.deleteGuide,
   })
 
   // Connect pan callback
@@ -107,6 +111,15 @@ export default function App() {
         e.preventDefault()
         tools.setSpaceDown(true)
         return
+      }
+
+      // Delete hovered guide
+      if (e.key === 'Delete' && !inputFocused) {
+        const hoveredId = tools.getHoveredGuideId()
+        if (hoveredId) {
+          state.deleteGuide(hoveredId)
+          return
+        }
       }
 
       if (e.ctrlKey || e.metaKey) {
@@ -188,6 +201,8 @@ export default function App() {
       <TopBar
         tool={state.tool}
         setTool={state.setTool}
+        eraserSize={state.eraserSize}
+        setEraserSize={state.setEraserSize}
         bloom={state.bloom}
         setBloom={state.setBloom}
         showGrid={state.showGrid}
@@ -203,6 +218,7 @@ export default function App() {
         onImportFrame={handleImportFrame}
         onNew={handleNew}
         onOpenLibrary={() => setShowLibrary(true)}
+        onAddGuide={state.addGuide}
         pixelsCanvasRef={pixelsCanvasRef}
         bloomCanvasRef={bloomCanvasRef}
       />
@@ -217,7 +233,11 @@ export default function App() {
           onionEnabled={state.onionEnabled}
           bloom={state.bloom}
           tool={state.tool}
+          eraserSize={state.eraserSize}
           isPlaying={state.isPlaying}
+          guides={state.guides}
+          hoveredGuideAxis={tools.hoveredGuideAxis}
+          selectedGuideId={null}
           onCursorChange={(x, y) => { setCursorX(x); setCursorY(y) }}
           onPointerDown={tools.onPointerDown}
           onPointerMove={tools.onPointerMove}

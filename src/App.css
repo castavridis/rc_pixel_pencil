@@ -120,6 +120,17 @@ button.danger:hover:not(:disabled) {
   border-right: none;
 }
 
+.eraser-sizes {
+  display: flex;
+  gap: 2px;
+  margin-left: 2px;
+}
+
+.eraser-sizes button {
+  min-width: 22px;
+  padding: 0 4px;
+}
+
 .topbar-bloom {
   gap: 6px;
 }
@@ -156,6 +167,7 @@ button.danger:hover:not(:disabled) {
 .canvas-wrapper {
   position: absolute;
   /* centering done with left/top 50% + transform in JSX */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 /* ── Timeline ─────────────────────────────────────────────────────── */
@@ -272,6 +284,26 @@ button.danger:hover:not(:disabled) {
   color: var(--text-dim);
   font-size: 11px;
   min-width: 80px;
+}
+
+.status-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-slider {
+  width: 100px;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.zoom-value {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 30px;
+  text-align: right;
 }
 
 .status-zoom-btns {
