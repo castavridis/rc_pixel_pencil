@@ -21,6 +21,16 @@ export default function App() {
   const bloomCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
 
+  const handleMoveReferenceImage = useCallback((x: number, y: number) => {
+    if (!state.referenceImage) return
+    state.setReferenceImage({ ...state.referenceImage, x, y })
+  }, [state])
+
+  const handleScaleReferenceImage = useCallback((scale: number) => {
+    if (!state.referenceImage) return
+    state.setReferenceImage({ ...state.referenceImage, scale })
+  }, [state])
+
   const tools = useTools({
     getFrames: state.getFrames,
     getCurrentFrame: state.getCurrentFrame,
@@ -31,8 +41,11 @@ export default function App() {
     isPlaying: state.isPlaying,
     eraserSize: state.eraserSize,
     guides: state.guides,
+    guidesLocked: state.guidesLocked,
+    referenceImage: state.referenceImage,
     onMoveGuide: state.moveGuide,
     onDeleteGuide: state.deleteGuide,
+    onMoveReferenceImage: handleMoveReferenceImage,
   })
 
   // Connect pan callback
@@ -100,6 +113,7 @@ export default function App() {
 
   // Delete the currently hovered guide (called from canvas right-click or Delete key)
   const handleDeleteHoveredGuide = useCallback(() => {
+    if (state.guidesLocked) return
     const id = tools.getHoveredGuideId()
     if (id) state.deleteGuide(id)
   }, [tools, state])
@@ -216,10 +230,16 @@ export default function App() {
         onNew={handleNew}
         onOpenLibrary={() => setShowLibrary(true)}
         onAddGuide={state.addGuide}
+        guidesLocked={state.guidesLocked}
+        onSetGuidesLocked={state.setGuidesLocked}
         pixelsCanvasRef={pixelsCanvasRef}
         bloomCanvasRef={bloomCanvasRef}
         referenceImage={state.referenceImage}
         onSetReferenceImage={state.setReferenceImage}
+        canvasColor={state.canvasColor}
+        onSetCanvasColor={state.setCanvasColor}
+        pixelColor={state.pixelColor}
+        onSetPixelColor={state.setPixelColor}
       />
 
       <div className="canvas-area" ref={viewportRef}>
@@ -235,11 +255,13 @@ export default function App() {
           eraserSize={state.eraserSize}
           isPlaying={state.isPlaying}
           guides={state.guides}
+          guidesLocked={state.guidesLocked}
           hoveredGuideAxis={tools.hoveredGuideAxis}
           selectedGuideId={null}
           pendingDeleteGuideId={tools.pendingDeleteGuideId}
           spaceDown={tools.spaceDown}
           isPanning={tools.isPanning}
+          isRefDragging={tools.isRefDragging}
           onCursorChange={(x, y) => { setCursorX(x); setCursorY(y) }}
           onPointerDown={tools.onPointerDown}
           onPointerMove={tools.onPointerMove}
@@ -249,6 +271,9 @@ export default function App() {
           pixelsCanvasRef={pixelsCanvasRef}
           bloomCanvasRef={bloomCanvasRef}
           referenceImage={state.referenceImage}
+          canvasColor={state.canvasColor}
+          pixelColor={state.pixelColor}
+          onScaleReferenceImage={handleScaleReferenceImage}
         />
       </div>
 

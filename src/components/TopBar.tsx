@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ToolId, BloomSettings, PixelBuffer } from '../types'
+import { ToolId, BloomSettings, PixelBuffer, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
 import { downloadSVG, downloadFramesSVGZip, importSVG } from '../lib/svg'
 import { exportAnimatedGIF, exportPNG } from '../lib/gif'
 
@@ -26,10 +26,16 @@ interface TopBarProps {
   onNew: () => void
   onOpenLibrary: () => void
   onAddGuide: (axis: 'h' | 'v') => void
+  guidesLocked: boolean
+  onSetGuidesLocked: (v: boolean) => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
-  referenceImage: { dataUrl: string; opacity: number } | null
-  onSetReferenceImage: (img: { dataUrl: string; opacity: number } | null) => void
+  referenceImage: ReferenceImageSettings | null
+  onSetReferenceImage: (img: ReferenceImageSettings | null) => void
+  canvasColor: string
+  onSetCanvasColor: (v: string) => void
+  pixelColor: string
+  onSetPixelColor: (v: string) => void
 }
 
 export function TopBar({
@@ -53,10 +59,16 @@ export function TopBar({
   onNew,
   onOpenLibrary,
   onAddGuide,
+  guidesLocked,
+  onSetGuidesLocked,
   pixelsCanvasRef,
   bloomCanvasRef,
   referenceImage,
   onSetReferenceImage,
+  canvasColor,
+  onSetCanvasColor,
+  pixelColor,
+  onSetPixelColor,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -95,7 +107,24 @@ export function TopBar({
     if (!file) return
     const reader = new FileReader()
     reader.onload = ev => {
-      onSetReferenceImage({ dataUrl: ev.target!.result as string, opacity: 0.4 })
+      const dataUrl = ev.target!.result as string
+      const img = new Image()
+      img.onload = () => {
+        const aspect = img.naturalWidth / img.naturalHeight
+        const cAspect = CANVAS_W / CANVAS_H
+        let fitW: number, fitH: number
+        if (aspect > cAspect) { fitW = CANVAS_W; fitH = CANVAS_W / aspect }
+        else { fitH = CANVAS_H; fitW = CANVAS_H * aspect }
+        onSetReferenceImage({
+          dataUrl,
+          opacity: 0.4,
+          locked: false,
+          x: Math.round((CANVAS_W - fitW) / 2),
+          y: Math.round((CANVAS_H - fitH) / 2),
+          scale: 1,
+        })
+      }
+      img.src = dataUrl
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -158,6 +187,11 @@ export function TopBar({
         <div className="topbar-group">
           <button onClick={() => onAddGuide('h')} title="Add horizontal guide">H Guide</button>
           <button onClick={() => onAddGuide('v')} title="Add vertical guide">V Guide</button>
+          <button
+            className={guidesLocked ? 'active' : ''}
+            onClick={() => onSetGuidesLocked(!guidesLocked)}
+            title="Lock guides (prevents moving/deleting)"
+          >Lock</button>
         </div>
 
         <div className="topbar-group topbar-bloom">
@@ -183,11 +217,32 @@ export function TopBar({
             <input
               type="range"
               min={2}
-              max={100}
+              max={500}
               step={1}
               value={bloom.radius}
               onChange={e => setBloom({ ...bloom, radius: parseInt(e.target.value) })}
               disabled={!bloom.enabled}
+            />
+          </label>
+        </div>
+
+        <div className="topbar-group">
+          <label title="Canvas background color">
+            BG:
+            <input
+              type="color"
+              value={canvasColor}
+              onChange={e => onSetCanvasColor(e.target.value)}
+              style={{ width: 28, height: 20, padding: 1, border: 'none', cursor: 'pointer', background: 'none' }}
+            />
+          </label>
+          <label title="Pixel color">
+            Px:
+            <input
+              type="color"
+              value={pixelColor}
+              onChange={e => onSetPixelColor(e.target.value)}
+              style={{ width: 28, height: 20, padding: 1, border: 'none', cursor: 'pointer', background: 'none' }}
             />
           </label>
         </div>
@@ -245,6 +300,23 @@ export function TopBar({
                   onChange={e => onSetReferenceImage({ ...referenceImage, opacity: parseFloat(e.target.value) })}
                 />
               </label>
+              <label title="Reference image scale">
+                Scale:
+                <input
+                  type="range"
+                  min={0.05}
+                  max={5}
+                  step={0.05}
+                  value={referenceImage.scale}
+                  onChange={e => onSetReferenceImage({ ...referenceImage, scale: parseFloat(e.target.value) })}
+                  disabled={referenceImage.locked}
+                />
+              </label>
+              <button
+                className={referenceImage.locked ? 'active' : ''}
+                onClick={() => onSetReferenceImage({ ...referenceImage, locked: !referenceImage.locked })}
+                title={referenceImage.locked ? 'Unlock reference image' : 'Lock reference image'}
+              >{referenceImage.locked ? 'Locked' : 'Lock'}</button>
               <button onClick={() => onSetReferenceImage(null)} title="Clear reference image">×</button>
             </>
           )}

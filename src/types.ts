@@ -8,7 +8,16 @@ export type ToolId = 'pencil' | 'eraser'
 export interface BloomSettings {
   enabled: boolean
   intensity: number   // 0.0–1.0
-  radius: number      // 2–20
+  radius: number
+}
+
+export interface ReferenceImageSettings {
+  dataUrl: string
+  opacity: number    // 0–1
+  locked: boolean
+  x: number         // canvas-pixel offset (can be negative)
+  y: number         // canvas-pixel offset (can be negative)
+  scale: number     // multiplier on aspect-ratio-fit size (1.0 = fits canvas)
 }
 
 // One animation — stored in Supabase and IndexedDB

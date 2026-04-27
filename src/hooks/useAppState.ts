@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PixelBuffer, ToolId, BloomSettings, Guide, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
+import { PixelBuffer, ToolId, BloomSettings, Guide, ReferenceImageSettings, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
 import { debouncedSave, loadFromIndexedDB } from '../lib/storage'
 
 function blankFrame(): PixelBuffer {
@@ -25,7 +25,10 @@ export function useAppState() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [guides, setGuides] = useState<Guide[]>([])
-  const [referenceImage, setReferenceImage] = useState<{ dataUrl: string; opacity: number } | null>(null)
+  const [guidesLocked, setGuidesLocked] = useState(false)
+  const [referenceImage, setReferenceImage] = useState<ReferenceImageSettings | null>(null)
+  const [canvasColor, setCanvasColor] = useState('#20242d')
+  const [pixelColor, setPixelColor] = useState('#d2e1ff')
 
   const framesRef = useRef(frames)
   const currentFrameRef = useRef(currentFrame)
@@ -180,6 +183,8 @@ export function useAppState() {
     stopPlay,
     isLoaded,
     guides,
+    guidesLocked,
+    setGuidesLocked,
     addGuide,
     moveGuide,
     deleteGuide,
@@ -191,6 +196,10 @@ export function useAppState() {
     loadFrames,
     referenceImage,
     setReferenceImage,
+    canvasColor,
+    setCanvasColor,
+    pixelColor,
+    setPixelColor,
     // Mutable helpers
     setFrame,
     getFrames,

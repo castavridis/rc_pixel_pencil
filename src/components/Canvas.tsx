@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react'
-import { PixelBuffer, BloomSettings, ToolId, Guide, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, BloomSettings, ToolId, Guide, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
 import { renderBloom, clearBloom } from '../lib/bloom'
 
 interface CanvasProps {
@@ -14,6 +14,7 @@ interface CanvasProps {
   eraserSize: number
   isPlaying: boolean
   guides: Guide[]
+  guidesLocked: boolean
   hoveredGuideAxis: 'h' | 'v' | null
   onCursorChange: (x: number | null, y: number | null) => void
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>, tool: ToolId) => void
@@ -27,7 +28,11 @@ interface CanvasProps {
   pendingDeleteGuideId: string | null
   spaceDown: boolean
   isPanning: boolean
-  referenceImage: { dataUrl: string; opacity: number } | null
+  isRefDragging: boolean
+  referenceImage: ReferenceImageSettings | null
+  canvasColor: string
+  pixelColor: string
+  onScaleReferenceImage: (scale: number) => void
 }
 
 export function Canvas({
@@ -42,6 +47,7 @@ export function Canvas({
   eraserSize,
   isPlaying,
   guides,
+  guidesLocked,
   hoveredGuideAxis,
   onCursorChange,
   onPointerDown,
@@ -55,7 +61,11 @@ export function Canvas({
   pendingDeleteGuideId,
   spaceDown,
   isPanning,
+  isRefDragging,
   referenceImage,
+  canvasColor,
+  pixelColor,
+  onScaleReferenceImage,
 }: CanvasProps) {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const refCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -79,6 +89,8 @@ export function Canvas({
   const cursorPxRef = useRef<{ x: number; y: number } | null>(null)
   const referenceImageRef = useRef(referenceImage)
   const refImgElementRef = useRef<HTMLImageElement | null>(null)
+  const guidesLockedRef = useRef(guidesLocked)
+  const pixelColorRef = useRef(pixelColor)
 
   useEffect(() => { framesRef.current = frames }, [frames])
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
@@ -87,29 +99,33 @@ export function Canvas({
   useEffect(() => { onionEnabledRef.current = onionEnabled }, [onionEnabled])
   useEffect(() => { zoomRef.current = zoom }, [zoom])
   useEffect(() => { guidesRef.current = guides }, [guides])
+  useEffect(() => { guidesLockedRef.current = guidesLocked }, [guidesLocked])
   useEffect(() => { selectedGuideIdRef.current = selectedGuideId }, [selectedGuideId])
   useEffect(() => { pendingDeleteGuideIdRef.current = pendingDeleteGuideId }, [pendingDeleteGuideId])
   useEffect(() => { toolRef.current = tool }, [tool])
   useEffect(() => { eraserSizeRef.current = eraserSize }, [eraserSize])
+  useEffect(() => { pixelColorRef.current = pixelColor }, [pixelColor])
   useEffect(() => {
     referenceImageRef.current = referenceImage
     if (referenceImage) {
-      const img = new Image()
-      img.src = referenceImage.dataUrl
-      refImgElementRef.current = img
+      if (!refImgElementRef.current || refImgElementRef.current.src !== referenceImage.dataUrl) {
+        const img = new Image()
+        img.src = referenceImage.dataUrl
+        refImgElementRef.current = img
+      }
     } else {
       refImgElementRef.current = null
     }
   }, [referenceImage])
 
-  // Draw background once
+  // Redraw background whenever canvasColor changes
   useEffect(() => {
     const canvas = bgCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#000'
+    ctx.fillStyle = canvasColor
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
-  }, [])
+  }, [canvasColor])
 
   // RAF render loop
   useEffect(() => {
@@ -120,9 +136,16 @@ export function Canvas({
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
       const ref = referenceImageRef.current
       const img = refImgElementRef.current
-      if (!ref || !img || !img.complete) return
+      if (!ref || !img || !img.complete || !img.naturalWidth) return
+      const aspect = img.naturalWidth / img.naturalHeight
+      const canvasAspect = CANVAS_W / CANVAS_H
+      let fitW: number, fitH: number
+      if (aspect > canvasAspect) { fitW = CANVAS_W; fitH = CANVAS_W / aspect }
+      else { fitH = CANVAS_H; fitW = CANVAS_H * aspect }
+      const drawW = fitW * ref.scale
+      const drawH = fitH * ref.scale
       ctx.globalAlpha = ref.opacity
-      ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H)
+      ctx.drawImage(img, ref.x, ref.y, drawW, drawH)
       ctx.globalAlpha = 1
     }
 
@@ -169,7 +192,7 @@ export function Canvas({
       const fi = currentFrameRef.current
       const frame = framesRef.current[fi]
       if (!frame) return
-      ctx.fillStyle = '#fff'
+      ctx.fillStyle = pixelColorRef.current
       for (let y = 0; y < CANVAS_H; y++) {
         for (let x = 0; x < CANVAS_W; x++) {
           if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
@@ -207,7 +230,11 @@ export function Canvas({
         const isPendingDelete = g.id === pendingDeleteGuideIdRef.current
         ctx.strokeStyle = isPendingDelete
           ? 'rgba(255,80,80,0.9)'
-          : isSelected ? 'rgba(255,200,50,0.9)' : 'rgba(68,170,255,0.7)'
+          : isSelected
+            ? 'rgba(255,200,50,0.9)'
+            : guidesLockedRef.current
+              ? 'rgba(220,60,60,0.35)'
+              : 'rgba(220,60,60,0.75)'
         ctx.lineWidth = 1
         ctx.setLineDash([4, 4])
         ctx.beginPath()
@@ -261,11 +288,18 @@ export function Canvas({
   }, [pixelsCanvasRef, bloomCanvasRef])
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (!e.ctrlKey && !e.metaKey) return
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -1 : 1
-    onZoomScroll(delta, e.clientX, e.clientY)
-  }, [onZoomScroll])
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      onZoomScroll(e.deltaY > 0 ? -1 : 1, e.clientX, e.clientY)
+      return
+    }
+    const ref = referenceImageRef.current
+    if (ref && !ref.locked) {
+      e.preventDefault()
+      const factor = e.deltaY > 0 ? 0.9 : 1.1
+      onScaleReferenceImage(Math.max(0.05, Math.min(20, ref.scale * factor)))
+    }
+  }, [onZoomScroll, onScaleReferenceImage])
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const rect = wrapperRef.current?.getBoundingClientRect()
@@ -295,8 +329,10 @@ export function Canvas({
   let cursor = 'none'
   if (isPlaying) {
     cursor = 'default'
-  } else if (isPanning) {
+  } else if (isPanning || isRefDragging) {
     cursor = 'grabbing'
+  } else if (referenceImage && !referenceImage.locked) {
+    cursor = 'grab'
   } else if (hoveredGuideAxis === 'h') {
     cursor = 'ns-resize'
   } else if (hoveredGuideAxis === 'v') {

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { ToolId, PixelBuffer, Guide, CANVAS_W, CANVAS_H } from '../types'
+import { ToolId, PixelBuffer, Guide, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
 import { bresenhamLineWithStamp, fillSquare, setPixel } from '../lib/bresenham'
 
 interface UseToolsOptions {
@@ -12,8 +12,11 @@ interface UseToolsOptions {
   isPlaying: boolean
   eraserSize: number
   guides: Guide[]
+  guidesLocked: boolean
+  referenceImage: ReferenceImageSettings | null
   onMoveGuide: (id: string, position: number) => void
   onDeleteGuide: (id: string) => void
+  onMoveReferenceImage: (x: number, y: number) => void
 }
 
 export function useTools(opts: UseToolsOptions) {
@@ -23,6 +26,7 @@ export function useTools(opts: UseToolsOptions) {
   const panStartRef = useRef<{ mx: number; my: number } | null>(null)
   const spaceDownRef = useRef(false)
   const guideDragRef = useRef<{ id: string; axis: 'h' | 'v'; pendingDelete: boolean } | null>(null)
+  const refDragRef = useRef<{ startClientX: number; startClientY: number; startImgX: number; startImgY: number } | null>(null)
 
   // Hovered guide axis — exposed as state so Canvas can read it for cursor styling
   const [hoveredGuideAxis, setHoveredGuideAxis] = useState<'h' | 'v' | null>(null)
@@ -30,6 +34,7 @@ export function useTools(opts: UseToolsOptions) {
   const [pendingDeleteGuideId, setPendingDeleteGuideId] = useState<string | null>(null)
   const [spaceDown, setSpaceDownState] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
+  const [isRefDragging, setIsRefDragging] = useState(false)
 
   const onPanRef = useRef<((dx: number, dy: number) => void) | null>(null)
 
@@ -75,11 +80,25 @@ export function useTools(opts: UseToolsOptions) {
 
     const { x, y } = canvasCoords(e)
 
-    // Guide drag takes priority over drawing
-    const hit = findGuideHit(x, y)
-    if (hit) {
-      guideDragRef.current = { id: hit.id, axis: hit.axis, pendingDelete: false }
+    // Reference image drag (all clicks when unlocked)
+    if (opts.referenceImage && !opts.referenceImage.locked) {
+      refDragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startImgX: opts.referenceImage.x,
+        startImgY: opts.referenceImage.y,
+      }
+      setIsRefDragging(true)
       return
+    }
+
+    // Guide drag takes priority over drawing (only when not locked)
+    if (!opts.guidesLocked) {
+      const hit = findGuideHit(x, y)
+      if (hit) {
+        guideDragRef.current = { id: hit.id, axis: hit.axis, pendingDelete: false }
+        return
+      }
     }
 
     const frameIndex = opts.getCurrentFrame()
@@ -109,10 +128,18 @@ export function useTools(opts: UseToolsOptions) {
       return
     }
 
+    // Reference image drag
+    if (refDragRef.current) {
+      const dx = (e.clientX - refDragRef.current.startClientX) / opts.zoom
+      const dy = (e.clientY - refDragRef.current.startClientY) / opts.zoom
+      opts.onMoveReferenceImage(refDragRef.current.startImgX + dx, refDragRef.current.startImgY + dy)
+      return
+    }
+
     const { x, y } = canvasCoords(e)
 
-    // Guide drag
-    if (guideDragRef.current) {
+    // Guide drag (only when not locked)
+    if (!opts.guidesLocked && guideDragRef.current) {
       const { id, axis } = guideDragRef.current
       const raw = axis === 'v' ? x : y
       const max = axis === 'v' ? CANVAS_W : CANVAS_H
@@ -124,12 +151,17 @@ export function useTools(opts: UseToolsOptions) {
       return
     }
 
-    // Update hovered guide for cursor styling
-    const hit = findGuideHit(x, y)
-    const newAxis = hit ? hit.axis : null
-    if (newAxis !== hoveredGuideAxis) {
-      setHoveredGuideAxis(newAxis)
-      hoveredGuideIdRef.current = hit ? hit.id : null
+    // Update hovered guide for cursor styling (only when not locked)
+    if (!opts.guidesLocked) {
+      const hit = findGuideHit(x, y)
+      const newAxis = hit ? hit.axis : null
+      if (newAxis !== hoveredGuideAxis) {
+        setHoveredGuideAxis(newAxis)
+        hoveredGuideIdRef.current = hit ? hit.id : null
+      }
+    } else if (hoveredGuideAxis !== null) {
+      setHoveredGuideAxis(null)
+      hoveredGuideIdRef.current = null
     }
 
     if (!isDrawingRef.current || opts.isPlaying) return
@@ -166,6 +198,10 @@ export function useTools(opts: UseToolsOptions) {
     setIsPanning(false)
     panStartRef.current = null
     lastPxRef.current = null
+    if (refDragRef.current) {
+      refDragRef.current = null
+      setIsRefDragging(false)
+    }
     if (guideDragRef.current) {
       const { id, pendingDelete } = guideDragRef.current
       if (pendingDelete) opts.onDeleteGuide(id)
@@ -187,5 +223,6 @@ export function useTools(opts: UseToolsOptions) {
     pendingDeleteGuideId,
     spaceDown,
     isPanning,
+    isRefDragging,
   }
 }
