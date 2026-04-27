@@ -28,6 +28,8 @@ interface TopBarProps {
   onAddGuide: (axis: 'h' | 'v') => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
+  referenceImage: { dataUrl: string; opacity: number } | null
+  onSetReferenceImage: (img: { dataUrl: string; opacity: number } | null) => void
 }
 
 export function TopBar({
@@ -53,8 +55,11 @@ export function TopBar({
   onAddGuide,
   pixelsCanvasRef,
   bloomCanvasRef,
+  referenceImage,
+  onSetReferenceImage,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const refImageInputRef = useRef<HTMLInputElement>(null)
 
   const handleImportSVG = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -85,6 +90,17 @@ export function TopBar({
     }
   }
 
+  const handleRefImageImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      onSetReferenceImage({ dataUrl: ev.target!.result as string, opacity: 0.4 })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   const handleExportPNG = () => {
     const pc = pixelsCanvasRef.current
     const bc = bloomCanvasRef.current
@@ -100,8 +116,8 @@ export function TopBar({
           <button
             className={tool === 'pencil' ? 'active' : ''}
             onClick={() => setTool('pencil')}
-            title="Pencil (P)"
-          >P</button>
+            title="Draw (D)"
+          >D</button>
           <button
             className={tool === 'eraser' ? 'active' : ''}
             onClick={() => setTool('eraser')}
@@ -155,7 +171,7 @@ export function TopBar({
             <input
               type="range"
               min={0}
-              max={1}
+              max={5}
               step={0.05}
               value={bloom.intensity}
               onChange={e => setBloom({ ...bloom, intensity: parseFloat(e.target.value) })}
@@ -167,7 +183,7 @@ export function TopBar({
             <input
               type="range"
               min={2}
-              max={20}
+              max={100}
               step={1}
               value={bloom.radius}
               onChange={e => setBloom({ ...bloom, radius: parseInt(e.target.value) })}
@@ -206,6 +222,32 @@ export function TopBar({
           <button onClick={onOpenLibrary} title="Open cloud library">
             Library
           </button>
+          <button onClick={() => refImageInputRef.current?.click()} title="Load reference image overlay">
+            Ref Image
+          </button>
+          <input
+            ref={refImageInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleRefImageImport}
+          />
+          {referenceImage && (
+            <>
+              <label title="Reference image opacity">
+                Opacity:
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={referenceImage.opacity}
+                  onChange={e => onSetReferenceImage({ ...referenceImage, opacity: parseFloat(e.target.value) })}
+                />
+              </label>
+              <button onClick={() => onSetReferenceImage(null)} title="Clear reference image">×</button>
+            </>
+          )}
         </div>
       </div>
     </div>

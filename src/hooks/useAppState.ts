@@ -20,11 +20,12 @@ export function useAppState() {
   const [bloom, setBloom] = useState<BloomSettings>(DEFAULT_BLOOM)
   const [zoom, setZoomState] = useState(10)
   const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [showGrid, setShowGrid] = useState(false)
-  const [onionEnabled, setOnionEnabled] = useState(false)
+  const [showGrid, setShowGrid] = useState(true)
+  const [onionEnabled, setOnionEnabled] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [guides, setGuides] = useState<Guide[]>([])
+  const [referenceImage, setReferenceImage] = useState<{ dataUrl: string; opacity: number } | null>(null)
 
   const framesRef = useRef(frames)
   const currentFrameRef = useRef(currentFrame)
@@ -188,6 +189,8 @@ export function useAppState() {
     duplicateFrame,
     clearCanvas,
     loadFrames,
+    referenceImage,
+    setReferenceImage,
     // Mutable helpers
     setFrame,
     getFrames,

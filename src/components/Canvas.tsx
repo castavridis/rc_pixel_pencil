@@ -20,9 +20,14 @@ interface CanvasProps {
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>, tool: ToolId) => void
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void
   onZoomScroll: (delta: number, cx: number, cy: number) => void
+  onDeleteHoveredGuide: () => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
   selectedGuideId: string | null
+  pendingDeleteGuideId: string | null
+  spaceDown: boolean
+  isPanning: boolean
+  referenceImage: { dataUrl: string; opacity: number } | null
 }
 
 export function Canvas({
@@ -43,11 +48,17 @@ export function Canvas({
   onPointerMove,
   onPointerUp,
   onZoomScroll,
+  onDeleteHoveredGuide,
   pixelsCanvasRef,
   bloomCanvasRef,
   selectedGuideId,
+  pendingDeleteGuideId,
+  spaceDown,
+  isPanning,
+  referenceImage,
 }: CanvasProps) {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
+  const refCanvasRef = useRef<HTMLCanvasElement>(null)
   const onionCanvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -62,9 +73,12 @@ export function Canvas({
   const zoomRef = useRef(zoom)
   const guidesRef = useRef(guides)
   const selectedGuideIdRef = useRef(selectedGuideId)
+  const pendingDeleteGuideIdRef = useRef(pendingDeleteGuideId)
   const toolRef = useRef(tool)
   const eraserSizeRef = useRef(eraserSize)
   const cursorPxRef = useRef<{ x: number; y: number } | null>(null)
+  const referenceImageRef = useRef(referenceImage)
+  const refImgElementRef = useRef<HTMLImageElement | null>(null)
 
   useEffect(() => { framesRef.current = frames }, [frames])
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
@@ -74,10 +88,21 @@ export function Canvas({
   useEffect(() => { zoomRef.current = zoom }, [zoom])
   useEffect(() => { guidesRef.current = guides }, [guides])
   useEffect(() => { selectedGuideIdRef.current = selectedGuideId }, [selectedGuideId])
+  useEffect(() => { pendingDeleteGuideIdRef.current = pendingDeleteGuideId }, [pendingDeleteGuideId])
   useEffect(() => { toolRef.current = tool }, [tool])
   useEffect(() => { eraserSizeRef.current = eraserSize }, [eraserSize])
+  useEffect(() => {
+    referenceImageRef.current = referenceImage
+    if (referenceImage) {
+      const img = new Image()
+      img.src = referenceImage.dataUrl
+      refImgElementRef.current = img
+    } else {
+      refImgElementRef.current = null
+    }
+  }, [referenceImage])
 
-  // Draw background (once)
+  // Draw background once
   useEffect(() => {
     const canvas = bgCanvasRef.current
     if (!canvas) return
@@ -88,6 +113,19 @@ export function Canvas({
 
   // RAF render loop
   useEffect(() => {
+    function drawRef() {
+      const canvas = refCanvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')!
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
+      const ref = referenceImageRef.current
+      const img = refImgElementRef.current
+      if (!ref || !img || !img.complete) return
+      ctx.globalAlpha = ref.opacity
+      ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H)
+      ctx.globalAlpha = 1
+    }
+
     function drawOnion() {
       const canvas = onionCanvasRef.current
       if (!canvas) return
@@ -100,18 +138,20 @@ export function Canvas({
       const prev = fs[fi - 1]
       const next = fs[fi + 1]
 
+      // Previous frame: blue-ish
       if (prev) {
-        ctx.globalAlpha = 0.30
-        ctx.fillStyle = '#fff'
+        ctx.globalAlpha = 0.35
+        ctx.fillStyle = 'rgb(70,130,255)'
         for (let y = 0; y < CANVAS_H; y++) {
           for (let x = 0; x < CANVAS_W; x++) {
             if (prev[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
           }
         }
       }
+      // Next frame: gray
       if (next) {
-        ctx.globalAlpha = 0.20
-        ctx.fillStyle = 'rgb(100,200,255)'
+        ctx.globalAlpha = 0.25
+        ctx.fillStyle = 'rgb(160,160,160)'
         for (let y = 0; y < CANVAS_H; y++) {
           for (let x = 0; x < CANVAS_W; x++) {
             if (next[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
@@ -146,9 +186,8 @@ export function Canvas({
       const ctx = canvas.getContext('2d')!
       ctx.clearRect(0, 0, W, H)
 
-      // Grid — crisp 1px lines at screen resolution
-      if (showGridRef.current || z > 5) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+      if (showGridRef.current) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)'
         ctx.lineWidth = 1
         ctx.beginPath()
         for (let x = 0; x <= CANVAS_W; x++) {
@@ -165,7 +204,10 @@ export function Canvas({
       // Guides
       for (const g of guidesRef.current) {
         const isSelected = g.id === selectedGuideIdRef.current
-        ctx.strokeStyle = isSelected ? 'rgba(255,200,50,0.9)' : 'rgba(68,170,255,0.65)'
+        const isPendingDelete = g.id === pendingDeleteGuideIdRef.current
+        ctx.strokeStyle = isPendingDelete
+          ? 'rgba(255,80,80,0.9)'
+          : isSelected ? 'rgba(255,200,50,0.9)' : 'rgba(68,170,255,0.7)'
         ctx.lineWidth = 1
         ctx.setLineDash([4, 4])
         ctx.beginPath()
@@ -187,7 +229,7 @@ export function Canvas({
         const size = t === 'eraser' ? eraserSizeRef.current : 1
         const half = Math.floor(size / 2)
         ctx.strokeStyle = t === 'eraser'
-          ? 'rgba(255,80,80,0.7)'
+          ? 'rgba(255,100,100,0.8)'
           : 'rgba(255,255,255,0.65)'
         ctx.lineWidth = 1
         ctx.strokeRect(
@@ -200,13 +242,14 @@ export function Canvas({
     }
 
     function tick() {
+      drawRef()
       drawOnion()
       drawPixels()
       const b = bloomRef.current
       const pc = pixelsCanvasRef.current
       const bc = bloomCanvasRef.current
       if (pc && bc) {
-        if (b.enabled) renderBloom(pc, bc, b)
+        if (b.enabled) renderBloom(pc, bc, b, zoomRef.current)
         else clearBloom(bc)
       }
       drawOverlay()
@@ -244,18 +287,22 @@ export function Canvas({
     cursorPxRef.current = null
   }, [onCursorChange])
 
-  // Cursor style: guide hover overrides tool cursor
-  let cursor = 'default'
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    onDeleteHoveredGuide()
+  }, [onDeleteHoveredGuide])
+
+  let cursor = 'none'
   if (isPlaying) {
     cursor = 'default'
+  } else if (isPanning) {
+    cursor = 'grabbing'
   } else if (hoveredGuideAxis === 'h') {
     cursor = 'ns-resize'
   } else if (hoveredGuideAxis === 'v') {
     cursor = 'ew-resize'
-  } else if (tool === 'eraser') {
-    cursor = 'none'
-  } else {
-    cursor = 'none'  // we draw our own cursor preview for pencil too
+  } else if (spaceDown) {
+    cursor = 'grab'
   }
 
   const pixelCanvasStyle: React.CSSProperties = {
@@ -265,6 +312,15 @@ export function Canvas({
     width: '100%',
     height: '100%',
     imageRendering: 'pixelated',
+  }
+
+  // Bloom canvas must NOT have image-rendering: pixelated so the soft glow renders correctly
+  const bloomCanvasStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
   }
 
   const wrapperW = CANVAS_W * zoom
@@ -291,12 +347,15 @@ export function Canvas({
         onPointerMove={handlePointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={handlePointerLeave}
+        onContextMenu={handleContextMenu}
       >
         {/* Pixel-art layers: physically 128×64, scaled by CSS+pixelated */}
         <canvas ref={bgCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
+        <canvas ref={refCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={onionCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={pixelsCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
-        <canvas ref={bloomCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
+        {/* Bloom: smooth (not pixelated) so the blur gradient is preserved after CSS scale */}
+        <canvas ref={bloomCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={bloomCanvasStyle} />
         {/* Overlay: screen-resolution canvas for grid, guides, cursor preview */}
         <canvas
           ref={overlayCanvasRef}

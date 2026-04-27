@@ -22,18 +22,24 @@ export function useTools(opts: UseToolsOptions) {
   const isPanningRef = useRef(false)
   const panStartRef = useRef<{ mx: number; my: number } | null>(null)
   const spaceDownRef = useRef(false)
-  const guideDragRef = useRef<{ id: string; axis: 'h' | 'v' } | null>(null)
+  const guideDragRef = useRef<{ id: string; axis: 'h' | 'v'; pendingDelete: boolean } | null>(null)
 
   // Hovered guide axis — exposed as state so Canvas can read it for cursor styling
   const [hoveredGuideAxis, setHoveredGuideAxis] = useState<'h' | 'v' | null>(null)
   const hoveredGuideIdRef = useRef<string | null>(null)
+  const [pendingDeleteGuideId, setPendingDeleteGuideId] = useState<string | null>(null)
+  const [spaceDown, setSpaceDownState] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
 
   const onPanRef = useRef<((dx: number, dy: number) => void) | null>(null)
 
   const setOnPan = useCallback((fn: (dx: number, dy: number) => void) => {
     onPanRef.current = fn
   }, [])
-  const setSpaceDown = useCallback((v: boolean) => { spaceDownRef.current = v }, [])
+  const setSpaceDown = useCallback((v: boolean) => {
+    spaceDownRef.current = v
+    setSpaceDownState(v)
+  }, [])
 
   function canvasCoords(e: React.PointerEvent<HTMLElement>): { x: number; y: number } {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -43,7 +49,7 @@ export function useTools(opts: UseToolsOptions) {
   }
 
   function findGuideHit(cx: number, cy: number): Guide | null {
-    const threshold = Math.max(1, Math.round(4 / opts.zoom))
+    const threshold = Math.max(1, Math.round(2 / opts.zoom))
     for (const g of opts.guides) {
       const dist = g.axis === 'v'
         ? Math.abs(cx - g.position)
@@ -60,6 +66,7 @@ export function useTools(opts: UseToolsOptions) {
     // Middle mouse or Space+left = pan
     if (e.button === 1 || (e.button === 0 && spaceDownRef.current)) {
       isPanningRef.current = true
+      setIsPanning(true)
       panStartRef.current = { mx: e.clientX, my: e.clientY }
       return
     }
@@ -71,7 +78,7 @@ export function useTools(opts: UseToolsOptions) {
     // Guide drag takes priority over drawing
     const hit = findGuideHit(x, y)
     if (hit) {
-      guideDragRef.current = { id: hit.id, axis: hit.axis }
+      guideDragRef.current = { id: hit.id, axis: hit.axis, pendingDelete: false }
       return
     }
 
@@ -107,9 +114,12 @@ export function useTools(opts: UseToolsOptions) {
     // Guide drag
     if (guideDragRef.current) {
       const { id, axis } = guideDragRef.current
-      const pos = axis === 'v'
-        ? Math.max(0, Math.min(CANVAS_W - 1, x))
-        : Math.max(0, Math.min(CANVAS_H - 1, y))
+      const raw = axis === 'v' ? x : y
+      const max = axis === 'v' ? CANVAS_W : CANVAS_H
+      const pendingDelete = raw < 0 || raw >= max
+      guideDragRef.current.pendingDelete = pendingDelete
+      setPendingDeleteGuideId(pendingDelete ? id : null)
+      const pos = pendingDelete ? raw : Math.max(0, Math.min(max - 1, raw))
       opts.onMoveGuide(id, pos)
       return
     }
@@ -153,10 +163,16 @@ export function useTools(opts: UseToolsOptions) {
   const onPointerUp = useCallback((_e: React.PointerEvent<HTMLElement>) => {
     isDrawingRef.current = false
     isPanningRef.current = false
+    setIsPanning(false)
     panStartRef.current = null
     lastPxRef.current = null
-    guideDragRef.current = null
-  }, [])
+    if (guideDragRef.current) {
+      const { id, pendingDelete } = guideDragRef.current
+      if (pendingDelete) opts.onDeleteGuide(id)
+      guideDragRef.current = null
+      setPendingDeleteGuideId(null)
+    }
+  }, [opts])
 
   const getHoveredGuideId = useCallback(() => hoveredGuideIdRef.current, [])
 
@@ -168,5 +184,8 @@ export function useTools(opts: UseToolsOptions) {
     setSpaceDown,
     hoveredGuideAxis,
     getHoveredGuideId,
+    pendingDeleteGuideId,
+    spaceDown,
+    isPanning,
   }
 }

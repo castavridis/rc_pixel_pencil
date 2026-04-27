@@ -68,7 +68,6 @@ export default function App() {
     state.setPan({ x: 0, y: 0 })
   }, [state])
 
-  // Undo/redo wrappers
   const handleUndo = useCallback(() => {
     const fi = state.currentFrame
     const result = history.undo(fi, state.frames[fi])
@@ -81,14 +80,12 @@ export default function App() {
     if (result) state.setFrame(fi, result)
   }, [state, history])
 
-  // Import SVG into current frame
   const handleImportFrame = useCallback((buf: PixelBuffer) => {
     const fi = state.currentFrame
     history.pushHistory(fi, state.frames[fi])
     state.setFrame(fi, buf)
   }, [state, history])
 
-  // New canvas
   const handleNew = useCallback(() => {
     const hasContent = state.frames.some(f => f.some(v => v !== 0))
     if (hasContent && !confirm('Discard current work and start fresh?')) return
@@ -96,11 +93,16 @@ export default function App() {
     state.clearCanvas()
   }, [state, history])
 
-  // Load from library
   const handleLoadFromLibrary = useCallback((frames: PixelBuffer[]) => {
     history.clearAll()
     state.loadFrames(frames)
   }, [state, history])
+
+  // Delete the currently hovered guide (called from canvas right-click or Delete key)
+  const handleDeleteHoveredGuide = useCallback(() => {
+    const id = tools.getHoveredGuideId()
+    if (id) state.deleteGuide(id)
+  }, [tools, state])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -115,11 +117,8 @@ export default function App() {
 
       // Delete hovered guide
       if (e.key === 'Delete' && !inputFocused) {
-        const hoveredId = tools.getHoveredGuideId()
-        if (hoveredId) {
-          state.deleteGuide(hoveredId)
-          return
-        }
+        handleDeleteHoveredGuide()
+        return
       }
 
       if (e.ctrlKey || e.metaKey) {
@@ -158,7 +157,7 @@ export default function App() {
       if (inputFocused) return
 
       switch (e.key) {
-        case 'p': case 'P': state.setTool('pencil'); break
+        case 'd': case 'D': state.setTool('pencil'); break
         case 'e': case 'E': state.setTool('eraser'); break
         case 'b': case 'B': state.setBloom({ ...state.bloom, enabled: !state.bloom.enabled }); break
         case 'g': case 'G': state.setShowGrid(!state.showGrid); break
@@ -179,9 +178,7 @@ export default function App() {
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        tools.setSpaceDown(false)
-      }
+      if (e.code === 'Space') tools.setSpaceDown(false)
     }
 
     document.addEventListener('keydown', onKeyDown)
@@ -190,7 +187,7 @@ export default function App() {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
     }
-  }, [state, history, tools, handleUndo, handleRedo, handleImportFrame, handleFitZoom])
+  }, [state, history, tools, handleUndo, handleRedo, handleImportFrame, handleFitZoom, handleDeleteHoveredGuide])
 
   if (!state.isLoaded) {
     return <div className="loading">Loading…</div>
@@ -221,6 +218,8 @@ export default function App() {
         onAddGuide={state.addGuide}
         pixelsCanvasRef={pixelsCanvasRef}
         bloomCanvasRef={bloomCanvasRef}
+        referenceImage={state.referenceImage}
+        onSetReferenceImage={state.setReferenceImage}
       />
 
       <div className="canvas-area" ref={viewportRef}>
@@ -238,13 +237,18 @@ export default function App() {
           guides={state.guides}
           hoveredGuideAxis={tools.hoveredGuideAxis}
           selectedGuideId={null}
+          pendingDeleteGuideId={tools.pendingDeleteGuideId}
+          spaceDown={tools.spaceDown}
+          isPanning={tools.isPanning}
           onCursorChange={(x, y) => { setCursorX(x); setCursorY(y) }}
           onPointerDown={tools.onPointerDown}
           onPointerMove={tools.onPointerMove}
           onPointerUp={tools.onPointerUp}
           onZoomScroll={handleZoomScroll}
+          onDeleteHoveredGuide={handleDeleteHoveredGuide}
           pixelsCanvasRef={pixelsCanvasRef}
           bloomCanvasRef={bloomCanvasRef}
+          referenceImage={state.referenceImage}
         />
       </div>
 

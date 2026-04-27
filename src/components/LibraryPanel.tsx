@@ -4,6 +4,7 @@ import {
   isSupabaseConfigured,
   listDrawings,
   saveDrawing,
+  updateDrawing,
   deleteDrawing,
   drawingToFrames,
 } from '../lib/supabase'
@@ -58,6 +59,20 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
     const loaded = drawingToFrames(drawing)
     onLoad(loaded)
     onClose()
+  }
+
+  const handleUpdate = async (drawing: Drawing) => {
+    if (!confirm(`Overwrite "${drawing.name}" with current animation?`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      await updateDrawing(drawing.id, drawing.name, frames)
+      await refresh()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async (drawing: Drawing) => {
@@ -118,6 +133,7 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
                     </div>
                     <div className="library-item-actions">
                       <button onClick={() => handleLoad(d)}>Load</button>
+                      <button onClick={() => handleUpdate(d)} disabled={saving}>Update</button>
                       <button className="danger" onClick={() => handleDelete(d)}>Del</button>
                     </div>
                   </li>
