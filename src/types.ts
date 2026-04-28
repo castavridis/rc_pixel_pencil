@@ -3,7 +3,15 @@ export const CANVAS_H = 64
 export const MAX_FRAMES = 24
 
 export type PixelBuffer = Uint8Array   // length CANVAS_W * CANVAS_H
-export type ToolId = 'pencil' | 'eraser' | 'select'
+export type ToolId = 'pencil' | 'eraser' | 'select' | 'stamp'
+
+export interface Stamp {
+  id: string
+  name: string
+  width: number
+  height: number
+  buf: Uint8Array  // width * height; 0=transparent, 1=fg, 2=dark
+}
 
 export interface BloomSettings {
   enabled: boolean

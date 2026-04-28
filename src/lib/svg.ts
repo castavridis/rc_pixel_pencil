@@ -16,6 +16,19 @@ export function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffe
   return out
 }
 
+export function compositeLayersMultiValue(layers: Layer[], frameIndex: number): Uint8Array {
+  const out = new Uint8Array(CANVAS_W * CANVAS_H)
+  for (const layer of layers) {
+    if (!layer.visible) continue
+    const frame = layer.frames[frameIndex]
+    if (!frame) continue
+    for (let i = 0; i < out.length; i++) {
+      if (frame[i] !== 0) out[i] = frame[i]
+    }
+  }
+  return out
+}
+
 export function exportSVG(frame: PixelBuffer): string {
   const rects: string[] = []
   for (let y = 0; y < CANVAS_H; y++) {

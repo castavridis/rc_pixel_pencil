@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
-  PixelBuffer, ToolId, BloomSettings, Guide, Layer,
+  PixelBuffer, ToolId, BloomSettings, Guide, Layer, Stamp,
   ReferenceImageSettings, SelectionRect, FloatingPaste, Clipboard,
   CANVAS_W, CANVAS_H, MAX_FRAMES,
 } from '../types'
-import { debouncedSave, flushSave, loadFromIndexedDB } from '../lib/storage'
+import { debouncedSave, flushSave, loadFromIndexedDB, loadStamps, debouncedSaveStamps } from '../lib/storage'
 
 function blankFrame(): PixelBuffer {
   return new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
@@ -64,7 +64,18 @@ export function useAppState() {
   const [referenceImage, setReferenceImage] = useState<ReferenceImageSettings | null>(null)
   const [canvasColor, setCanvasColor] = useState('#20242d')
   const [pixelColor, setPixelColor] = useState('#d2e1ff')
+  const [darkColor, setDarkColor] = useState('#20242d')
   const [showPreview, setShowPreview] = useState(true)
+
+  // ── Stamps ────────────────────────────────────────────────────────────────
+  const [stamps, setStampsState] = useState<Stamp[]>([])
+  const [activeStampId, setActiveStampId] = useState<string | null>(null)
+  const [showStamps, setShowStamps] = useState(false)
+
+  const setStamps = useCallback((next: Stamp[]) => {
+    setStampsState(next)
+    debouncedSaveStamps(next)
+  }, [])
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const selectionRef = useRef<SelectionRect | null>(null)
@@ -102,7 +113,7 @@ export function useAppState() {
 
   // ── Load from IndexedDB ───────────────────────────────────────────────────
   useEffect(() => {
-    loadFromIndexedDB().then(loaded => {
+    Promise.all([loadFromIndexedDB(), loadStamps()]).then(([loaded, loadedStamps]) => {
       if (loaded && loaded.layers.length > 0) {
         setLayersState(loaded.layers)
         layersRef.current = loaded.layers
@@ -113,6 +124,7 @@ export function useAppState() {
         setActiveLayerIdState(restoredActiveId)
         activeLayerIdRef.current = restoredActiveId
       }
+      setStampsState(loadedStamps)
       setIsLoaded(true)
     }).catch(() => setIsLoaded(true))
   }, [])
@@ -391,8 +403,9 @@ export function useAppState() {
     for (let py = 0; py < fp.h; py++) {
       for (let px = 0; px < fp.w; px++) {
         const sx = fp.x + px, sy = fp.y + py
-        if (sx >= 0 && sx < CANVAS_W && sy >= 0 && sy < CANVAS_H && fp.buf[py * fp.w + px]) {
-          frame[sy * CANVAS_W + sx] = 1
+        if (sx >= 0 && sx < CANVAS_W && sy >= 0 && sy < CANVAS_H) {
+          const v = fp.buf[py * fp.w + px]
+          if (v) frame[sy * CANVAS_W + sx] = v
         }
       }
     }
@@ -413,6 +426,30 @@ export function useAppState() {
   const clearSelection = useCallback(() => {
     setSelection(null)
   }, [setSelection])
+
+  // ── Stamp CRUD ────────────────────────────────────────────────────────────
+  const createStamp = useCallback((name: string, width: number, height: number) => {
+    const newStamp: Stamp = {
+      id: crypto.randomUUID(),
+      name,
+      width,
+      height,
+      buf: new Uint8Array(width * height),
+    }
+    const next = [...stamps, newStamp]
+    setStamps(next)
+    setActiveStampId(newStamp.id)
+  }, [stamps, setStamps])
+
+  const updateStamp = useCallback((updated: Stamp) => {
+    setStamps(stamps.map(s => s.id === updated.id ? updated : s))
+  }, [stamps, setStamps])
+
+  const deleteStamp = useCallback((id: string) => {
+    const next = stamps.filter(s => s.id !== id)
+    setStamps(next)
+    if (activeStampId === id) setActiveStampId(null)
+  }, [stamps, setStamps, activeStampId])
 
   return {
     // Layers
@@ -475,6 +512,8 @@ export function useAppState() {
     setCanvasColor,
     pixelColor,
     setPixelColor,
+    darkColor,
+    setDarkColor,
     showPreview,
     setShowPreview,
     // Selection
@@ -489,5 +528,15 @@ export function useAppState() {
     commitPaste,
     cancelPaste,
     clearSelection,
+    // Stamps
+    stamps,
+    setStamps,
+    activeStampId,
+    setActiveStampId,
+    showStamps,
+    setShowStamps,
+    createStamp,
+    updateStamp,
+    deleteStamp,
   }
 }

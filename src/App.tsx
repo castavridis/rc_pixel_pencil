@@ -6,6 +6,7 @@ import { StatusBar } from './components/StatusBar'
 import { LibraryPanel } from './components/LibraryPanel'
 import { LayerPanel } from './components/LayerPanel'
 import { PreviewPanel } from './components/PreviewPanel'
+import { StampPanel } from './components/StampPanel'
 import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
@@ -23,6 +24,20 @@ export default function App() {
   const pixelsCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const bloomCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+
+  const altDownRef = useRef(false)
+  const [altDown, setAltDown] = useState(false)
+  const isAltDown = useCallback(() => altDownRef.current, [])
+
+  const getActiveStamp = useCallback(() => {
+    if (!state.activeStampId) return null
+    return state.stamps.find(s => s.id === state.activeStampId) ?? null
+  }, [state.stamps, state.activeStampId])
+
+  const handleSelectStamp = useCallback((id: string) => {
+    state.setActiveStampId(id)
+    state.setTool('stamp')
+  }, [state])
 
   const handleMoveReferenceImage = useCallback((x: number, y: number) => {
     if (!state.referenceImage) return
@@ -50,6 +65,8 @@ export default function App() {
     onMoveGuide: state.moveGuide,
     onDeleteGuide: state.deleteGuide,
     onMoveReferenceImage: handleMoveReferenceImage,
+    isAltDown,
+    getActiveStamp,
     selection: state.selection,
     floatingPaste: state.floatingPaste,
     onSetSelection: state.setSelection,
@@ -165,9 +182,15 @@ export default function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       const inputFocused = document.activeElement?.tagName === 'INPUT'
 
-      // Shift is a modifier — handle regardless of inputFocused
+      // Modifier keys — handle regardless of inputFocused
       if (e.key === 'Shift') {
         tools.setShiftDown(true)
+        return
+      }
+      if (e.key === 'Alt') {
+        e.preventDefault()
+        altDownRef.current = true
+        setAltDown(true)
         return
       }
 
@@ -237,6 +260,7 @@ export default function App() {
         case 'd': case 'D': state.setTool('pencil'); break
         case 'e': case 'E': state.setTool('eraser'); break
         case 's': case 'S': state.setTool('select'); break
+        case 't': case 'T': state.setTool('stamp'); break
         case 'b': case 'B': state.setBloom({ ...state.bloom, enabled: !state.bloom.enabled }); break
         case 'g': case 'G': state.setShowGrid(!state.showGrid); break
         case 'o': case 'O': state.setOnionEnabled(!state.onionEnabled); break
@@ -267,6 +291,7 @@ export default function App() {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') tools.setSpaceDown(false)
       if (e.key === 'Shift') tools.setShiftDown(false)
+      if (e.key === 'Alt') { altDownRef.current = false; setAltDown(false) }
     }
 
     document.addEventListener('keydown', onKeyDown)
@@ -318,6 +343,11 @@ export default function App() {
         onSetCanvasColor={state.setCanvasColor}
         pixelColor={state.pixelColor}
         onSetPixelColor={state.setPixelColor}
+        darkColor={state.darkColor}
+        onSetDarkColor={state.setDarkColor}
+        showStamps={state.showStamps}
+        onToggleStamps={() => state.setShowStamps(!state.showStamps)}
+        activeStampName={getActiveStamp()?.name ?? null}
       />
 
       <div className="canvas-area" ref={viewportRef}>
@@ -355,14 +385,32 @@ export default function App() {
           onScaleReferenceImage={handleScaleReferenceImage}
           selection={state.selection}
           floatingPaste={state.floatingPaste}
+          darkColor={state.darkColor}
+          altDown={altDown}
+          activeStamp={getActiveStamp()}
         />
         {state.showPreview && (
           <PreviewPanel
             layers={state.layers}
             currentFrame={state.currentFrame}
             pixelColor={state.pixelColor}
+            darkColor={state.darkColor}
             canvasColor={state.canvasColor}
             onClose={() => state.setShowPreview(false)}
+          />
+        )}
+        {state.showStamps && (
+          <StampPanel
+            stamps={state.stamps}
+            activeStampId={state.activeStampId}
+            pixelColor={state.pixelColor}
+            darkColor={state.darkColor}
+            onSelectStamp={handleSelectStamp}
+            onUpdateStamp={state.updateStamp}
+            onCreateStamp={state.createStamp}
+            onDeleteStamp={state.deleteStamp}
+            onClose={() => state.setShowStamps(false)}
+            showLayers={showLayers}
           />
         )}
         {showLayers && (

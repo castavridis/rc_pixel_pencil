@@ -442,6 +442,170 @@ button.danger:hover:not(:disabled) {
   border-color: var(--danger);
 }
 
+/* ── Stamp Panel ─────────────────────────────────────────────────── */
+.stamp-panel {
+  position: absolute;
+  top: 8px;
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  max-height: calc(100% - 16px);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.stamp-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stamp-back-btn,
+.stamp-close-btn,
+.stamp-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0 3px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 2px;
+}
+.stamp-back-btn:hover,
+.stamp-close-btn:hover,
+.stamp-add-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+.stamp-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.stamp-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.1s;
+}
+.stamp-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.stamp-item--active {
+  background: rgba(68,170,255,0.08);
+  border-left: 2px solid var(--accent);
+  padding-left: 4px;
+}
+
+.stamp-thumbnail {
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  background: #111;
+}
+
+.stamp-name {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stamp-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 1px 3px;
+  font-size: 11px;
+  border-radius: 2px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.stamp-action-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text);
+  opacity: 1;
+}
+
+.stamp-new-form {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.stamp-new-form input[type="text"],
+.stamp-new-form input[type="number"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  height: 22px;
+}
+.stamp-new-form input[type="text"] {
+  width: 100%;
+}
+.stamp-new-form-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.stamp-editor-tools {
+  display: flex;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stamp-editor-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+
+.stamp-editor-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: #0a0a0a;
+  overflow: hidden;
+}
+
+.stamp-editor-canvas {
+  image-rendering: pixelated;
+  cursor: crosshair;
+  border: 1px solid var(--border);
+}
+
 /* ── Preview Panel ────────────────────────────────────────────────── */
 .preview-panel {
   position: absolute;

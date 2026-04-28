@@ -1,17 +1,24 @@
-import { PixelBuffer, Layer, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, Layer, Stamp, CANVAS_W, CANVAS_H } from '../types'
 
 const DB_NAME = 'pixel-display-studio'
+const DB_VERSION = 2
 const STORE_NAME = 'canvas'
+const STAMPS_STORE = 'stamps'
 const KEY = 'current'
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE_NAME)
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
+    req.onupgradeneeded = (event) => {
+      const db = req.result
+      const oldVersion = event.oldVersion
+      if (oldVersion < 1) db.createObjectStore(STORE_NAME)
+      if (oldVersion < 2) db.createObjectStore(STAMPS_STORE)
+      db.onversionchange = () => db.close()
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
+    req.onblocked = () => console.warn('DB upgrade blocked by another tab')
   })
 }
 
@@ -28,10 +35,31 @@ function decodeFrame(s: string): PixelBuffer {
   return buf
 }
 
+function encodeBuf(buf: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i])
+  return btoa(binary)
+}
+
+function decodeBuf(s: string, length: number): Uint8Array {
+  const bin = atob(s)
+  const buf = new Uint8Array(length)
+  for (let i = 0; i < Math.min(bin.length, length); i++) buf[i] = bin.charCodeAt(i)
+  return buf
+}
+
 interface SavedState {
   version: 2
   activeLayerId: string
   layers: { id: string; name: string; visible: boolean; frames: string[] }[]
+}
+
+interface StoredStamp {
+  id: string
+  name: string
+  width: number
+  height: number
+  buf: string
 }
 
 export interface LoadedState {
@@ -108,6 +136,47 @@ export async function loadFromIndexedDB(): Promise<LoadedState | null> {
   })
 }
 
+export async function saveStamps(stamps: Stamp[]): Promise<void> {
+  const db = await openDB()
+  const data: StoredStamp[] = stamps.map(s => ({
+    id: s.id,
+    name: s.name,
+    width: s.width,
+    height: s.height,
+    buf: encodeBuf(s.buf),
+  }))
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STAMPS_STORE, 'readwrite')
+    tx.objectStore(STAMPS_STORE).put(data, 'all')
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+export async function loadStamps(): Promise<Stamp[]> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STAMPS_STORE, 'readonly')
+    const req = tx.objectStore(STAMPS_STORE).get('all')
+    req.onsuccess = () => {
+      try {
+        const raw = req.result as StoredStamp[] | undefined
+        if (!raw) { resolve([]); return }
+        resolve(raw.map(s => ({
+          id: s.id,
+          name: s.name,
+          width: s.width,
+          height: s.height,
+          buf: decodeBuf(s.buf, s.width * s.height),
+        })))
+      } catch (e) {
+        resolve([])
+      }
+    }
+    req.onerror = () => reject(req.error)
+  })
+}
+
 export async function clearIndexedDB(): Promise<void> {
   const db = await openDB()
   return new Promise((resolve, reject) => {
@@ -142,4 +211,14 @@ export function flushSave(): void {
   pendingLayers = null
   pendingActiveId = null
   saveToIndexedDB(layers, activeLayerId).catch(console.error)
+}
+
+let stampSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+export function debouncedSaveStamps(stamps: Stamp[]): void {
+  if (stampSaveTimer) clearTimeout(stampSaveTimer)
+  stampSaveTimer = setTimeout(() => {
+    stampSaveTimer = null
+    saveStamps(stamps).catch(console.error)
+  }, 250)
 }

@@ -1,6 +1,6 @@
 import { CANVAS_W, CANVAS_H, PixelBuffer } from '../types'
 
-export function setPixel(buf: PixelBuffer, x: number, y: number, value: 0 | 1): void {
+export function setPixel(buf: PixelBuffer, x: number, y: number, value: 0 | 1 | 2): void {
   if (x < 0 || x >= CANVAS_W || y < 0 || y >= CANVAS_H) return
   buf[y * CANVAS_W + x] = value
 }
@@ -15,7 +15,7 @@ export function fillSquare(
   cx: number,
   cy: number,
   size: number,
-  value: 0 | 1,
+  value: 0 | 1 | 2,
 ): void {
   const half = Math.floor(size / 2)
   for (let dy = -half; dy < size - half; dy++) {

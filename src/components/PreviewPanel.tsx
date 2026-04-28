@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Layer } from '../types'
-import { compositeLayers } from '../lib/svg'
+import { compositeLayersMultiValue } from '../lib/svg'
 
 interface PreviewPanelProps {
   layers: Layer[]
   currentFrame: number
   pixelColor: string
+  darkColor: string
   canvasColor: string
   onClose: () => void
 }
@@ -15,7 +16,7 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
 }
 
-export function PreviewPanel({ layers, currentFrame, pixelColor, canvasColor, onClose }: PreviewPanelProps) {
+export function PreviewPanel({ layers, currentFrame, pixelColor, darkColor, canvasColor, onClose }: PreviewPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -24,22 +25,25 @@ export function PreviewPanel({ layers, currentFrame, pixelColor, canvasColor, on
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const buf = compositeLayers(layers, currentFrame)
+    const buf = compositeLayersMultiValue(layers, currentFrame)
     const imageData = ctx.createImageData(128, 64)
     const [pr, pg, pb] = hexToRgb(pixelColor)
+    const [dr, dg, db] = hexToRgb(darkColor)
     const [br, bg, bb] = hexToRgb(canvasColor)
 
     for (let i = 0; i < buf.length; i++) {
       const o = i * 4
-      if (buf[i]) {
+      if (buf[i] === 1) {
         imageData.data[o] = pr; imageData.data[o + 1] = pg; imageData.data[o + 2] = pb
+      } else if (buf[i] === 2) {
+        imageData.data[o] = dr; imageData.data[o + 1] = dg; imageData.data[o + 2] = db
       } else {
         imageData.data[o] = br; imageData.data[o + 1] = bg; imageData.data[o + 2] = bb
       }
       imageData.data[o + 3] = 255
     }
     ctx.putImageData(imageData, 0, 0)
-  }, [layers, currentFrame, pixelColor, canvasColor])
+  }, [layers, currentFrame, pixelColor, darkColor, canvasColor])
 
   return (
     <div className="preview-panel">

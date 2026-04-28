@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react'
-import { BloomSettings, ToolId, Guide, Layer, ReferenceImageSettings, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
+import { BloomSettings, ToolId, Stamp, Guide, Layer, ReferenceImageSettings, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
 import { renderGlow, clearGlow } from '../lib/glow'
 
 interface CanvasProps {
@@ -36,6 +36,9 @@ interface CanvasProps {
   onScaleReferenceImage: (scale: number) => void
   selection: SelectionRect | null
   floatingPaste: FloatingPaste | null
+  darkColor: string
+  altDown: boolean
+  activeStamp: Stamp | null
 }
 
 export function Canvas({
@@ -72,6 +75,9 @@ export function Canvas({
   onScaleReferenceImage,
   selection,
   floatingPaste,
+  darkColor,
+  altDown,
+  activeStamp,
 }: CanvasProps) {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const refCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -99,6 +105,9 @@ export function Canvas({
   const referenceImageRef = useRef(referenceImage)
   const refImgElementRef = useRef<HTMLImageElement | null>(null)
   const pixelColorRef = useRef(pixelColor)
+  const darkColorRef = useRef(darkColor)
+  const altDownRef = useRef(altDown)
+  const activeStampRef = useRef(activeStamp)
   const selectionRef = useRef(selection)
   const floatingPasteRef = useRef(floatingPaste)
 
@@ -116,6 +125,9 @@ export function Canvas({
   useEffect(() => { toolRef.current = tool }, [tool])
   useEffect(() => { eraserSizeRef.current = eraserSize }, [eraserSize])
   useEffect(() => { pixelColorRef.current = pixelColor }, [pixelColor])
+  useEffect(() => { darkColorRef.current = darkColor }, [darkColor])
+  useEffect(() => { altDownRef.current = altDown }, [altDown])
+  useEffect(() => { activeStampRef.current = activeStamp }, [activeStamp])
   useEffect(() => { selectionRef.current = selection }, [selection])
   useEffect(() => { floatingPasteRef.current = floatingPaste }, [floatingPaste])
   useEffect(() => {
@@ -216,7 +228,6 @@ export function Canvas({
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
       const fi = currentFrameRef.current
       const activeId = activeLayerIdRef.current
-      ctx.fillStyle = pixelColorRef.current
 
       for (const layer of layersRef.current) {
         if (!layer.visible) continue
@@ -225,7 +236,14 @@ export function Canvas({
         ctx.globalAlpha = layer.id === activeId ? 1.0 : 0.4
         for (let y = 0; y < CANVAS_H; y++) {
           for (let x = 0; x < CANVAS_W; x++) {
-            if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
+            const v = frame[y * CANVAS_W + x]
+            if (v === 1) {
+              ctx.fillStyle = pixelColorRef.current
+              ctx.fillRect(x, y, 1, 1)
+            } else if (v === 2) {
+              ctx.fillStyle = darkColorRef.current
+              ctx.fillRect(x, y, 1, 1)
+            }
           }
         }
       }
@@ -314,18 +332,40 @@ export function Canvas({
       const cur = cursorPxRef.current
       if (cur && toolRef.current !== 'select') {
         const t = toolRef.current
-        const size = t === 'eraser' ? eraserSizeRef.current : 1
-        const half = Math.floor(size / 2)
-        ctx.strokeStyle = t === 'eraser'
-          ? 'rgba(255,100,100,0.8)'
-          : 'rgba(255,255,255,0.65)'
-        ctx.lineWidth = 1
-        ctx.strokeRect(
-          (cur.x - half) * z + 0.5,
-          (cur.y - half) * z + 0.5,
-          size * z,
-          size * z,
-        )
+        if (t === 'stamp') {
+          const stamp = activeStampRef.current
+          if (stamp) {
+            ctx.globalAlpha = 0.55
+            for (let sy = 0; sy < stamp.height; sy++) {
+              for (let sx = 0; sx < stamp.width; sx++) {
+                const v = stamp.buf[sy * stamp.width + sx]
+                if (v === 1) ctx.fillStyle = pixelColorRef.current
+                else if (v === 2) ctx.fillStyle = darkColorRef.current
+                else continue
+                ctx.fillRect((cur.x + sx) * z, (cur.y + sy) * z, z, z)
+              }
+            }
+            ctx.globalAlpha = 1
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+            ctx.lineWidth = 1
+            ctx.strokeRect(cur.x * z + 0.5, cur.y * z + 0.5, stamp.width * z, stamp.height * z)
+          }
+        } else {
+          const size = t === 'eraser' ? eraserSizeRef.current : 1
+          const half = Math.floor(size / 2)
+          ctx.strokeStyle = t === 'eraser'
+            ? 'rgba(255,100,100,0.8)'
+            : altDownRef.current
+              ? darkColorRef.current
+              : 'rgba(255,255,255,0.65)'
+          ctx.lineWidth = 1
+          ctx.strokeRect(
+            (cur.x - half) * z + 0.5,
+            (cur.y - half) * z + 0.5,
+            size * z,
+            size * z,
+          )
+        }
       }
     }
 

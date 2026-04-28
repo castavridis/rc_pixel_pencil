@@ -1,48 +1,54 @@
-import { PixelBuffer, Layer, CANVAS_W, CANVAS_H } from '../types'
-import { downloadBlob } from './svg'
+import { Layer, CANVAS_W, CANVAS_H } from '../types'
+import { downloadBlob, compositeLayersMultiValue } from './svg'
 import { GIFEncoder, applyPalette } from 'gifenc'
 
-function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
-  const out = new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
-  for (const layer of layers) {
-    if (!layer.visible) continue
-    const frame = layer.frames[frameIndex]
-    if (!frame) continue
-    for (let i = 0; i < out.length; i++) {
-      if (frame[i]) out[i] = 1
-    }
-  }
-  return out
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
 }
 
-function pixelBufferToRGBA(frame: PixelBuffer): Uint8Array {
+function pixelBufferToRGBA(
+  frame: Uint8Array,
+  pixelRgb: [number, number, number],
+  darkRgb: [number, number, number],
+  bgRgb: [number, number, number],
+): Uint8Array {
   const rgba = new Uint8Array(CANVAS_W * CANVAS_H * 4)
   for (let i = 0; i < CANVAS_W * CANVAS_H; i++) {
-    const v = frame[i] ? 255 : 0
-    rgba[i * 4 + 0] = v
-    rgba[i * 4 + 1] = v
-    rgba[i * 4 + 2] = v
+    const v = frame[i]
+    const [r, g, b] = v === 1 ? pixelRgb : v === 2 ? darkRgb : bgRgb
+    rgba[i * 4 + 0] = r
+    rgba[i * 4 + 1] = g
+    rgba[i * 4 + 2] = b
     rgba[i * 4 + 3] = 255
   }
   return rgba
 }
 
-export async function exportAnimatedGIF(layers: Layer[], fps: number): Promise<void> {
+export async function exportAnimatedGIF(
+  layers: Layer[],
+  fps: number,
+  pixelColor = '#ffffff',
+  darkColor = '#000000',
+  canvasColor = '#000000',
+): Promise<void> {
   const encoder = GIFEncoder()
-  const palette = [[0, 0, 0], [255, 255, 255]]
+  const bgRgb = hexToRgb(canvasColor)
+  const pixelRgb = hexToRgb(pixelColor)
+  const darkRgb = hexToRgb(darkColor)
+  const palette = [bgRgb, pixelRgb, darkRgb] as [number, number, number][]
   const delay = Math.round(1000 / fps)
   const frameCount = layers[0]?.frames.length ?? 1
 
   for (let fi = 0; fi < frameCount; fi++) {
-    const frame = compositeLayers(layers, fi)
-    const rgba = pixelBufferToRGBA(frame)
+    const frame = compositeLayersMultiValue(layers, fi)
+    const rgba = pixelBufferToRGBA(frame, pixelRgb, darkRgb, bgRgb)
     const indexed = applyPalette(rgba, palette)
     encoder.writeFrame(indexed, CANVAS_W, CANVAS_H, { palette, delay, repeat: 0 })
   }
 
   encoder.finish()
   const bytes = encoder.bytes()
-  // Use slice() to get a regular ArrayBuffer (not SharedArrayBuffer)
   downloadBlob(new Blob([bytes.slice().buffer], { type: 'image/gif' }), 'animation.gif')
 }
 

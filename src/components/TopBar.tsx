@@ -32,6 +32,11 @@ interface TopBarProps {
   onToggleLayers: () => void
   showPreview: boolean
   onTogglePreview: () => void
+  showStamps: boolean
+  onToggleStamps: () => void
+  activeStampName: string | null
+  darkColor: string
+  onSetDarkColor: (v: string) => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
   referenceImage: ReferenceImageSettings | null
@@ -69,6 +74,11 @@ export function TopBar({
   onToggleLayers,
   showPreview,
   onTogglePreview,
+  showStamps,
+  onToggleStamps,
+  activeStampName,
+  darkColor,
+  onSetDarkColor,
   pixelsCanvasRef,
   bloomCanvasRef,
   referenceImage,
@@ -104,7 +114,7 @@ export function TopBar({
 
   const handleExportGIF = async () => {
     try {
-      await exportAnimatedGIF(layers, 12)
+      await exportAnimatedGIF(layers, 12, pixelColor, darkColor, canvasColor)
     } catch (err) {
       alert(`GIF export failed: ${err}`)
     }
@@ -165,6 +175,16 @@ export function TopBar({
             onClick={() => setTool('select')}
             title="Select (S)"
           >S</button>
+          <button
+            className={tool === 'stamp' ? 'active' : ''}
+            onClick={() => setTool('stamp')}
+            title="Stamp tool (T)"
+          >T</button>
+          {tool === 'stamp' && (
+            <span style={{ fontSize: 10, color: 'var(--text-dim)', alignSelf: 'center' }}>
+              {activeStampName ?? 'no stamp'}
+            </span>
+          )}
           {tool === 'eraser' && (
             <span className="eraser-sizes">
               {ERASER_SIZES.map(s => (
@@ -258,6 +278,15 @@ export function TopBar({
               style={{ width: 28, height: 20, padding: 1, border: 'none', cursor: 'pointer', background: 'none' }}
             />
           </label>
+          <label title="Dark pixel color (Alt+draw)">
+            Dk:
+            <input
+              type="color"
+              value={darkColor}
+              onChange={e => onSetDarkColor(e.target.value)}
+              style={{ width: 28, height: 20, padding: 1, border: 'none', cursor: 'pointer', background: 'none' }}
+            />
+          </label>
         </div>
       </div>
 
@@ -295,6 +324,11 @@ export function TopBar({
             onClick={onToggleLayers}
             title="Toggle layer panel"
           >Layers</button>
+          <button
+            className={showStamps ? 'active' : ''}
+            onClick={onToggleStamps}
+            title="Toggle stamp panel"
+          >Stamps</button>
           <button
             className={showPreview ? 'active' : ''}
             onClick={onTogglePreview}

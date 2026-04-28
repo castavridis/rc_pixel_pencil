@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { ToolId, PixelBuffer, Guide, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
+import { ToolId, PixelBuffer, Stamp, Guide, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
 import { bresenhamLineWithStamp, fillSquare, setPixel } from '../lib/bresenham'
 
 interface UseToolsOptions {
@@ -15,6 +15,8 @@ interface UseToolsOptions {
   guidesLocked: boolean
   referenceImage: { locked: boolean; x: number; y: number } | null
   onMoveReferenceImage: (x: number, y: number) => void
+  isAltDown: () => boolean
+  getActiveStamp: () => Stamp | null
   // Selection
   selection: SelectionRect | null
   floatingPaste: FloatingPaste | null
@@ -83,6 +85,20 @@ export function useTools(opts: UseToolsOptions) {
     return null
   }
 
+  function applyStamp(buf: PixelBuffer, stamp: Stamp, cx: number, cy: number): void {
+    for (let sy = 0; sy < stamp.height; sy++) {
+      for (let sx = 0; sx < stamp.width; sx++) {
+        const v = stamp.buf[sy * stamp.width + sx]
+        if (v === 0) continue
+        const px = cx + sx
+        const py = cy + sy
+        if (px >= 0 && px < CANVAS_W && py >= 0 && py < CANVAS_H) {
+          buf[py * CANVAS_W + px] = v
+        }
+      }
+    }
+  }
+
   function isOverFloating(cx: number, cy: number): boolean {
     const fp = opts.floatingPaste
     if (!fp) return false
@@ -148,13 +164,28 @@ export function useTools(opts: UseToolsOptions) {
       }
     }
 
+    // Stamp tool
+    if (tool === 'stamp') {
+      const stamp = opts.getActiveStamp()
+      if (!stamp) return
+      const frameIndex = opts.getCurrentFrame()
+      const frames = opts.getFrames()
+      const buf = frames[frameIndex].slice() as PixelBuffer
+      opts.pushHistory(frameIndex, buf)
+      applyStamp(buf, stamp, x, y)
+      opts.setFrame(frameIndex, buf)
+      lastPxRef.current = { x, y }
+      isDrawingRef.current = true
+      return
+    }
+
     // Drawing
     const frameIndex = opts.getCurrentFrame()
     const frames = opts.getFrames()
     const buf = frames[frameIndex].slice() as PixelBuffer
     opts.pushHistory(frameIndex, buf)
 
-    const val: 0 | 1 = tool === 'eraser' ? 0 : 1
+    const val: 0 | 1 | 2 = tool === 'eraser' ? 0 : (opts.isAltDown() ? 2 : 1)
     const size = tool === 'eraser' ? opts.eraserSize : 1
 
     if (size > 1) fillSquare(buf, x, y, size, val)
@@ -235,6 +266,19 @@ export function useTools(opts: UseToolsOptions) {
 
     if (!isDrawingRef.current || opts.isPlaying) return
 
+    // Stamp tool drag-to-paint
+    if (tool === 'stamp') {
+      const stamp = opts.getActiveStamp()
+      if (!stamp) return
+      const frameIndex = opts.getCurrentFrame()
+      const frames = opts.getFrames()
+      const buf = frames[frameIndex].slice() as PixelBuffer
+      applyStamp(buf, stamp, x, y)
+      opts.setFrame(frameIndex, buf)
+      lastPxRef.current = { x, y }
+      return
+    }
+
     // Apply SHIFT constraint for straight lines
     let cx = x, cy = y
     if (shiftDownRef.current && drawStartRef.current) {
@@ -247,7 +291,7 @@ export function useTools(opts: UseToolsOptions) {
     const frameIndex = opts.getCurrentFrame()
     const frames = opts.getFrames()
     const buf = frames[frameIndex].slice() as PixelBuffer
-    const val: 0 | 1 = tool === 'eraser' ? 0 : 1
+    const val: 0 | 1 | 2 = tool === 'eraser' ? 0 : (opts.isAltDown() ? 2 : 1)
     const size = tool === 'eraser' ? opts.eraserSize : 1
 
     if (lastPxRef.current) {
