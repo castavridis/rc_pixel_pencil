@@ -1,21 +1,23 @@
 import { useState, useEffect, useCallback } from 'react'
-import { PixelBuffer, Drawing } from '../types'
+import { Layer, Drawing } from '../types'
 import {
   isSupabaseConfigured,
   listDrawings,
   saveDrawing,
   updateDrawing,
   deleteDrawing,
-  drawingToFrames,
+  drawingToLayers,
+  drawingFrameCount,
+  drawingLayerCount,
 } from '../lib/supabase'
 
 interface LibraryPanelProps {
-  frames: PixelBuffer[]
-  onLoad: (frames: PixelBuffer[]) => void
+  layers: Layer[]
+  onLoad: (layers: Layer[]) => void
   onClose: () => void
 }
 
-export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
+export function LibraryPanel({ layers, onLoad, onClose }: LibraryPanelProps) {
   const [drawings, setDrawings] = useState<Drawing[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -45,7 +47,7 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
     setSaving(true)
     setError(null)
     try {
-      await saveDrawing(saveName.trim(), frames)
+      await saveDrawing(saveName.trim(), layers)
       setSaveName('')
       await refresh()
     } catch (e) {
@@ -56,8 +58,7 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
   }
 
   const handleLoad = (drawing: Drawing) => {
-    const loaded = drawingToFrames(drawing)
-    onLoad(loaded)
+    onLoad(drawingToLayers(drawing))
     onClose()
   }
 
@@ -66,7 +67,7 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
     setSaving(true)
     setError(null)
     try {
-      await updateDrawing(drawing.id, drawing.name, frames)
+      await updateDrawing(drawing.id, drawing.name, layers)
       await refresh()
     } catch (e) {
       setError(String(e))
@@ -122,22 +123,26 @@ export function LibraryPanel({ frames, onLoad, onClose }: LibraryPanelProps) {
               <div className="library-empty">No saved animations yet.</div>
             ) : (
               <ul className="library-list">
-                {drawings.map(d => (
-                  <li key={d.id} className="library-item">
-                    <div className="library-item-info">
-                      <span className="library-item-name">{d.name}</span>
-                      <span className="library-item-meta">
-                        {d.frames.length} frame{d.frames.length !== 1 ? 's' : ''} ·{' '}
-                        {new Date(d.updated_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="library-item-actions">
-                      <button onClick={() => handleLoad(d)}>Load</button>
-                      <button onClick={() => handleUpdate(d)} disabled={saving}>Update</button>
-                      <button className="danger" onClick={() => handleDelete(d)}>Del</button>
-                    </div>
-                  </li>
-                ))}
+                {drawings.map(d => {
+                  const fc = drawingFrameCount(d)
+                  const lc = drawingLayerCount(d)
+                  return (
+                    <li key={d.id} className="library-item">
+                      <div className="library-item-info">
+                        <span className="library-item-name">{d.name}</span>
+                        <span className="library-item-meta">
+                          {lc > 1 ? `${lc} layers · ` : ''}{fc} frame{fc !== 1 ? 's' : ''} ·{' '}
+                          {new Date(d.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="library-item-actions">
+                        <button onClick={() => handleLoad(d)}>Load</button>
+                        <button onClick={() => handleUpdate(d)} disabled={saving}>Update</button>
+                        <button className="danger" onClick={() => handleDelete(d)}>Del</button>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </>

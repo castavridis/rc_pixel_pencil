@@ -9,7 +9,7 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
-import { PixelBuffer } from './types'
+import { PixelBuffer, Layer } from './types'
 import './App.css'
 
 export default function App() {
@@ -127,9 +127,9 @@ export default function App() {
     state.clearCanvas()
   }, [state, history])
 
-  const handleLoadFromLibrary = useCallback((frames: PixelBuffer[]) => {
+  const handleLoadFromLibrary = useCallback((layers: Layer[]) => {
     history.clearAll()
-    state.loadFrames(frames)
+    state.loadLayers(layers)
   }, [state, history])
 
   const handleDeleteHoveredGuide = useCallback(() => {
@@ -159,8 +159,6 @@ export default function App() {
     state.stampLayerToAllFrames(id)
   }, [history, state])
 
-  // Derive composited frames for LibraryPanel (active layer only for simplicity)
-  const activeLayerFrames = state.getFrames()
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -404,7 +402,7 @@ export default function App() {
 
       {showLibrary && (
         <LibraryPanel
-          frames={activeLayerFrames}
+          layers={state.layers}
           onLoad={handleLoadFromLibrary}
           onClose={() => setShowLibrary(false)}
         />

@@ -16,7 +16,9 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 function encodeFrame(frame: PixelBuffer): string {
-  return btoa(String.fromCharCode(...frame))
+  let binary = ''
+  for (let i = 0; i < frame.length; i++) binary += String.fromCharCode(frame[i])
+  return btoa(binary)
 }
 
 function decodeFrame(s: string): PixelBuffer {
@@ -28,13 +30,20 @@ function decodeFrame(s: string): PixelBuffer {
 
 interface SavedState {
   version: 2
+  activeLayerId: string
   layers: { id: string; name: string; visible: boolean; frames: string[] }[]
 }
 
-export async function saveToIndexedDB(layers: Layer[]): Promise<void> {
+export interface LoadedState {
+  layers: Layer[]
+  activeLayerId: string | null
+}
+
+export async function saveToIndexedDB(layers: Layer[], activeLayerId: string): Promise<void> {
   const db = await openDB()
   const data: SavedState = {
     version: 2,
+    activeLayerId,
     layers: layers.map(l => ({
       id: l.id,
       name: l.name,
@@ -50,40 +59,50 @@ export async function saveToIndexedDB(layers: Layer[]): Promise<void> {
   })
 }
 
-export async function loadFromIndexedDB(): Promise<Layer[] | null> {
+export async function loadFromIndexedDB(): Promise<LoadedState | null> {
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly')
     const req = tx.objectStore(STORE_NAME).get(KEY)
     req.onsuccess = () => {
-      const raw = req.result
-      if (!raw) { resolve(null); return }
+      try {
+        const raw = req.result
+        if (!raw) { resolve(null); return }
 
-      // v1 migration: old format was a plain string[]
-      if (Array.isArray(raw)) {
-        if (raw.length === 0) { resolve(null); return }
-        resolve([{
-          id: crypto.randomUUID(),
-          name: 'Layer 1',
-          visible: true,
-          frames: raw.map(decodeFrame),
-        }])
-        return
+        // v1 migration: old format was a plain string[]
+        if (Array.isArray(raw)) {
+          if (raw.length === 0) { resolve(null); return }
+          resolve({
+            layers: [{
+              id: crypto.randomUUID(),
+              name: 'Layer 1',
+              visible: true,
+              frames: raw.map(decodeFrame),
+            }],
+            activeLayerId: null,
+          })
+          return
+        }
+
+        // v2 format
+        if (raw?.version === 2) {
+          const state = raw as SavedState
+          resolve({
+            layers: state.layers.map(l => ({
+              id: l.id,
+              name: l.name,
+              visible: l.visible,
+              frames: l.frames.map(decodeFrame),
+            })),
+            activeLayerId: state.activeLayerId ?? null,
+          })
+          return
+        }
+
+        resolve(null)
+      } catch (e) {
+        resolve(null)
       }
-
-      // v2 format
-      if (raw?.version === 2) {
-        const state = raw as SavedState
-        resolve(state.layers.map(l => ({
-          id: l.id,
-          name: l.name,
-          visible: l.visible,
-          frames: l.frames.map(decodeFrame),
-        })))
-        return
-      }
-
-      resolve(null)
     }
     req.onerror = () => reject(req.error)
   })
@@ -100,10 +119,27 @@ export async function clearIndexedDB(): Promise<void> {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let pendingLayers: Layer[] | null = null
+let pendingActiveId: string | null = null
 
-export function debouncedSave(layers: Layer[]): void {
+export function debouncedSave(layers: Layer[], activeLayerId: string): void {
+  pendingLayers = layers
+  pendingActiveId = activeLayerId
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    saveToIndexedDB(layers).catch(console.error)
+    saveTimer = null
+    pendingLayers = null
+    pendingActiveId = null
+    saveToIndexedDB(layers, activeLayerId).catch(console.error)
   }, 250)
+}
+
+export function flushSave(): void {
+  if (!pendingLayers || !pendingActiveId) return
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  const layers = pendingLayers
+  const activeLayerId = pendingActiveId
+  pendingLayers = null
+  pendingActiveId = null
+  saveToIndexedDB(layers, activeLayerId).catch(console.error)
 }

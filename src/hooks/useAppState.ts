@@ -4,7 +4,7 @@ import {
   ReferenceImageSettings, SelectionRect, FloatingPaste, Clipboard,
   CANVAS_W, CANVAS_H, MAX_FRAMES,
 } from '../types'
-import { debouncedSave, loadFromIndexedDB } from '../lib/storage'
+import { debouncedSave, flushSave, loadFromIndexedDB } from '../lib/storage'
 
 function blankFrame(): PixelBuffer {
   return new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
@@ -32,7 +32,7 @@ export function useAppState() {
   const setLayers = useCallback((next: Layer[]) => {
     setLayersState(next)
     layersRef.current = next
-    debouncedSave(next)
+    debouncedSave(next, activeLayerIdRef.current)
   }, [])
 
   const setActiveLayerId = useCallback((id: string) => {
@@ -89,14 +89,29 @@ export function useAppState() {
     setFloatingPasteState(fp)
   }, [])
 
+  // ── Flush save on page hide/unload ───────────────────────────────────────
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') flushSave() }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', onHide)
+    }
+  }, [])
+
   // ── Load from IndexedDB ───────────────────────────────────────────────────
   useEffect(() => {
     loadFromIndexedDB().then(loaded => {
-      if (loaded && loaded.length > 0) {
-        setLayersState(loaded)
-        layersRef.current = loaded
-        setActiveLayerIdState(loaded[0].id)
-        activeLayerIdRef.current = loaded[0].id
+      if (loaded && loaded.layers.length > 0) {
+        setLayersState(loaded.layers)
+        layersRef.current = loaded.layers
+        const restoredActiveId = loaded.activeLayerId
+          && loaded.layers.some(l => l.id === loaded.activeLayerId)
+          ? loaded.activeLayerId
+          : loaded.layers[loaded.layers.length - 1].id
+        setActiveLayerIdState(restoredActiveId)
+        activeLayerIdRef.current = restoredActiveId
       }
       setIsLoaded(true)
     }).catch(() => setIsLoaded(true))
@@ -133,7 +148,7 @@ export function useAppState() {
     if (frameCount() >= MAX_FRAMES) return
     const next = layersRef.current.map(l => ({ ...l, frames: [...l.frames, blankFrame()] }))
     setLayers(next)
-    setCurrentFrame(frameCount() - 1 + 1)
+    setCurrentFrame(frameCount() - 1)
   }, [setLayers, frameCount])
 
   const deleteFrame = useCallback(() => {
@@ -168,7 +183,7 @@ export function useAppState() {
     setActiveLayerIdState(newLayer.id)
     activeLayerIdRef.current = newLayer.id
     setCurrentFrame(0)
-    debouncedSave(next)
+    debouncedSave(next, newLayer.id)
   }, [])
 
   const loadFrames = useCallback((newFrames: PixelBuffer[]) => {
@@ -179,7 +194,18 @@ export function useAppState() {
     setActiveLayerIdState(newId)
     activeLayerIdRef.current = newId
     setCurrentFrame(0)
-    debouncedSave(next)
+    debouncedSave(next, newId)
+  }, [])
+
+  const loadLayers = useCallback((newLayers: Layer[]) => {
+    const next = newLayers.map(l => ({ ...l, frames: l.frames.map(f => f.slice() as PixelBuffer) }))
+    setLayersState(next)
+    layersRef.current = next
+    const activeId = next[next.length - 1]?.id ?? next[0].id
+    setActiveLayerIdState(activeId)
+    activeLayerIdRef.current = activeId
+    setCurrentFrame(0)
+    debouncedSave(next, activeId)
   }, [])
 
   // ── Layer frame helpers ───────────────────────────────────────────────────
@@ -408,6 +434,7 @@ export function useAppState() {
     duplicateFrame,
     clearCanvas,
     loadFrames,
+    loadLayers,
     // Mutable helpers
     setFrame,
     setLayerFrame,
