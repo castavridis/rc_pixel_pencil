@@ -55,6 +55,8 @@ interface TopBarProps {
   onCancelPaste: () => void
   smartErase: boolean
   onSetSmartErase: (v: boolean) => void
+  mirrorX: boolean
+  onSetMirrorX: (v: boolean) => void
 }
 
 export function TopBar({
@@ -107,6 +109,8 @@ export function TopBar({
   onCancelPaste,
   smartErase,
   onSetSmartErase,
+  mirrorX,
+  onSetMirrorX,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -255,6 +259,11 @@ export function TopBar({
             onClick={() => setOnionEnabled(!onionEnabled)}
             title="Toggle onion skinning (O)"
           >O</button>
+          <button
+            className={mirrorX ? 'active' : ''}
+            onClick={() => onSetMirrorX(!mirrorX)}
+            title="Mirror drawing horizontally (M)"
+          >MX</button>
         </div>
 
         <div className="topbar-group">

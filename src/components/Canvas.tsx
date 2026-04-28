@@ -39,6 +39,7 @@ interface CanvasProps {
   darkColor: string
   altDown: boolean
   activeStamp: Stamp | null
+  mirrorX: boolean
 }
 
 export function Canvas({
@@ -78,6 +79,7 @@ export function Canvas({
   darkColor,
   altDown,
   activeStamp,
+  mirrorX,
 }: CanvasProps) {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const refCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -110,6 +112,7 @@ export function Canvas({
   const activeStampRef = useRef(activeStamp)
   const selectionRef = useRef(selection)
   const floatingPasteRef = useRef(floatingPaste)
+  const mirrorXRef = useRef(mirrorX)
 
   useEffect(() => { layersRef.current = layers }, [layers])
   useEffect(() => { activeLayerIdRef.current = activeLayerId }, [activeLayerId])
@@ -130,6 +133,7 @@ export function Canvas({
   useEffect(() => { activeStampRef.current = activeStamp }, [activeStamp])
   useEffect(() => { selectionRef.current = selection }, [selection])
   useEffect(() => { floatingPasteRef.current = floatingPaste }, [floatingPaste])
+  useEffect(() => { mirrorXRef.current = mirrorX }, [mirrorX])
   useEffect(() => {
     referenceImageRef.current = referenceImage
     if (referenceImage) {
@@ -291,6 +295,18 @@ export function Canvas({
         } else {
           ctx.moveTo(0, g.position * z); ctx.lineTo(W, g.position * z)
         }
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
+
+      // Mirror axis line
+      if (mirrorXRef.current) {
+        ctx.strokeStyle = 'rgba(100,200,255,0.6)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([3, 3])
+        ctx.beginPath()
+        ctx.moveTo(CANVAS_W / 2 * z, 0)
+        ctx.lineTo(CANVAS_W / 2 * z, H)
         ctx.stroke()
         ctx.setLineDash([])
       }

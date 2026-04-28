@@ -26,6 +26,7 @@ interface UseToolsOptions {
   onMoveGuide: (id: string, position: number) => void
   onDeleteGuide: (id: string) => void
   smartErase: boolean
+  mirrorX: boolean
 }
 
 export function useTools(opts: UseToolsOptions) {
@@ -102,6 +103,16 @@ export function useTools(opts: UseToolsOptions) {
         }
       }
     }
+  }
+
+  function drawPixel(buf: PixelBuffer, x: number, y: number, val: 0 | 1 | 2): void {
+    setPixel(buf, x, y, val)
+    if (opts.mirrorX) setPixel(buf, CANVAS_W - 1 - x, y, val)
+  }
+
+  function drawSquare(buf: PixelBuffer, x: number, y: number, size: number, val: 0 | 1 | 2): void {
+    fillSquare(buf, x, y, size, val)
+    if (opts.mirrorX) fillSquare(buf, CANVAS_W - 1 - x, y, size, val)
   }
 
   function isOverFloating(cx: number, cy: number): boolean {
@@ -195,6 +206,7 @@ export function useTools(opts: UseToolsOptions) {
       const buf = frames[frameIndex].slice() as PixelBuffer
       opts.pushHistory(frameIndex, buf)
       applyStamp(buf, stamp, x, y)
+      if (opts.mirrorX) applyStamp(buf, stamp, CANVAS_W - x - stamp.width, y)
       opts.setFrame(frameIndex, buf)
       lastPxRef.current = { x, y }
       isDrawingRef.current = true
@@ -217,8 +229,8 @@ export function useTools(opts: UseToolsOptions) {
         : (opts.isAltDown() ? 2 : 1)
     const size = tool === 'eraser' ? opts.eraserSize : 1
 
-    if (size > 1) fillSquare(buf, x, y, size, val)
-    else setPixel(buf, x, y, val)
+    if (size > 1) drawSquare(buf, x, y, size, val)
+    else drawPixel(buf, x, y, val)
     opts.setFrame(frameIndex, buf)
     lastPxRef.current = { x, y }
     drawStartRef.current = { x, y }
@@ -316,6 +328,7 @@ export function useTools(opts: UseToolsOptions) {
       const frames = opts.getFrames()
       const buf = frames[frameIndex].slice() as PixelBuffer
       applyStamp(buf, stamp, x, y)
+      if (opts.mirrorX) applyStamp(buf, stamp, CANVAS_W - x - stamp.width, y)
       opts.setFrame(frameIndex, buf)
       lastPxRef.current = { x, y }
       return
@@ -344,17 +357,17 @@ export function useTools(opts: UseToolsOptions) {
       if (size > 1) {
         bresenhamLineWithStamp(
           lastPxRef.current.x, lastPxRef.current.y, cx, cy,
-          (px, py) => fillSquare(buf, px, py, size, val),
+          (px, py) => drawSquare(buf, px, py, size, val),
         )
       } else {
         bresenhamLineWithStamp(
           lastPxRef.current.x, lastPxRef.current.y, cx, cy,
-          (px, py) => setPixel(buf, px, py, val),
+          (px, py) => drawPixel(buf, px, py, val),
         )
       }
     } else {
-      if (size > 1) fillSquare(buf, cx, cy, size, val)
-      else setPixel(buf, cx, cy, val)
+      if (size > 1) drawSquare(buf, cx, cy, size, val)
+      else drawPixel(buf, cx, cy, val)
     }
     opts.setFrame(frameIndex, buf)
     lastPxRef.current = { x: cx, y: cy }

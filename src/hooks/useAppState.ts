@@ -68,6 +68,7 @@ export function useAppState() {
   const [pixelColor, setPixelColor] = useState('#d2e1ff')
   const [darkColor, setDarkColor] = useState('#20242d')
   const [showPreview, setShowPreview] = useState(true)
+  const [mirrorX, setMirrorX] = useState(false)
 
   // ── Stamps ────────────────────────────────────────────────────────────────
   const [stamps, setStampsState] = useState<Stamp[]>([])
@@ -520,6 +521,8 @@ export function useAppState() {
     setDarkColor,
     showPreview,
     setShowPreview,
+    mirrorX,
+    setMirrorX,
     // Selection
     selection,
     setSelection,

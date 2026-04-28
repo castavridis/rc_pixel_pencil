@@ -73,6 +73,7 @@ export default function App() {
     onMoveFloating: state.moveFloatingPaste,
     onCommitPaste: state.commitPaste,
     smartErase: state.smartErase,
+    mirrorX: state.mirrorX,
   })
 
   // Connect pan callback
@@ -264,6 +265,7 @@ export default function App() {
         case 't': case 'T': state.setTool('stamp'); break
         case 'b': case 'B': state.setBloom({ ...state.bloom, enabled: !state.bloom.enabled }); break
         case 'g': case 'G': state.setShowGrid(!state.showGrid); break
+        case 'm': case 'M': state.setMirrorX(!state.mirrorX); break
         case 'o': case 'O': state.setOnionEnabled(!state.onionEnabled); break
         case '1': state.setZoom(1); break
         case '2': state.setZoom(10); break
@@ -359,6 +361,8 @@ export default function App() {
         onCancelPaste={state.cancelPaste}
         smartErase={state.smartErase}
         onSetSmartErase={state.setSmartErase}
+        mirrorX={state.mirrorX}
+        onSetMirrorX={state.setMirrorX}
       />
 
       <div className="canvas-area" ref={viewportRef}>
@@ -399,6 +403,7 @@ export default function App() {
           darkColor={state.darkColor}
           altDown={altDown}
           activeStamp={getActiveStamp()}
+          mirrorX={state.mirrorX}
         />
         {state.showPreview && (
           <PreviewPanel
