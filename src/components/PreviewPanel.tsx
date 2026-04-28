@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Layer } from '../types'
 import { compositeLayersMultiValue } from '../lib/svg'
 
@@ -18,6 +18,12 @@ function hexToRgb(hex: string): [number, number, number] {
 
 export function PreviewPanel({ layers, currentFrame, pixelColor, darkColor, canvasColor, onClose }: PreviewPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState(() => ({
+    x: window.innerWidth - 148,
+    y: window.innerHeight - 104,
+  }))
+  const dragOffset = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -45,8 +51,35 @@ export function PreviewPanel({ layers, currentFrame, pixelColor, darkColor, canv
     ctx.putImageData(imageData, 0, 0)
   }, [layers, currentFrame, pixelColor, darkColor, canvasColor])
 
+  function handlePointerDown(e: React.PointerEvent) {
+    if ((e.target as HTMLElement).closest('.preview-close-btn')) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!dragOffset.current) return
+    const pw = panelRef.current?.offsetWidth ?? 130
+    const ph = panelRef.current?.offsetHeight ?? 98
+    setPos({
+      x: Math.max(0, Math.min(window.innerWidth - pw, e.clientX - dragOffset.current.x)),
+      y: Math.max(0, Math.min(window.innerHeight - ph, e.clientY - dragOffset.current.y)),
+    })
+  }
+
+  function handlePointerUp() {
+    dragOffset.current = null
+  }
+
   return (
-    <div className="preview-panel">
+    <div
+      ref={panelRef}
+      className="preview-panel"
+      style={{ left: pos.x, top: pos.y }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
       <div className="preview-panel-header">
         <span>Preview</span>
         <button className="preview-close-btn" onClick={onClose} title="Close preview">×</button>

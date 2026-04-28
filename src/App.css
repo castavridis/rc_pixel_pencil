@@ -614,15 +614,15 @@ button.danger:hover:not(:disabled) {
 
 /* ── Preview Panel ────────────────────────────────────────────────── */
 .preview-panel {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
+  position: fixed;
   z-index: 50;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   user-select: none;
+  touch-action: none;
+  cursor: grab;
 }
 
 .preview-panel-header {
@@ -647,8 +647,8 @@ button.danger:hover:not(:disabled) {
 
 .preview-panel canvas {
   display: block;
-  width: 36mm;
-  height: 17mm;
+  width: 128px;
+  height: 64px;
   image-rendering: pixelated;
 }
 
