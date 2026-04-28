@@ -1,4 +1,5 @@
 import { PixelBuffer, Layer, Drawing, CANVAS_W, CANVAS_H } from '../types'
+import { generateId } from './uuid'
 
 const SUPABASE_URL: string | undefined = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY: string | undefined = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -10,7 +11,7 @@ export function isSupabaseConfigured(): boolean {
 export function getDeviceId(): string {
   let id = localStorage.getItem('pds_device_id')
   if (!id) {
-    id = crypto.randomUUID()
+    id = generateId()
     localStorage.setItem('pds_device_id', id)
   }
   return id
@@ -68,7 +69,7 @@ export function drawingToLayers(drawing: Drawing): Layer[] {
     try { return decodeLayersFromSupabase(drawing.frames[0]) } catch {}
   }
   return [{
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: 'Layer 1',
     visible: true,
     frames: drawing.frames.map(decodeFrame),

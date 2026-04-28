@@ -5,13 +5,14 @@ import {
   CANVAS_W, CANVAS_H, MAX_FRAMES,
 } from '../types'
 import { debouncedSave, flushSave, loadFromIndexedDB, loadStamps, debouncedSaveStamps } from '../lib/storage'
+import { generateId } from '../lib/uuid'
 
 function blankFrame(): PixelBuffer {
   return new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
 }
 
 function makeInitialLayer(): Layer {
-  return { id: crypto.randomUUID(), name: 'Layer 1', visible: true, frames: [blankFrame()] }
+  return { id: generateId(), name: 'Layer 1', visible: true, frames: [blankFrame()] }
 }
 
 const DEFAULT_BLOOM: BloomSettings = {
@@ -199,7 +200,7 @@ export function useAppState() {
   }, [])
 
   const loadFrames = useCallback((newFrames: PixelBuffer[]) => {
-    const newId = crypto.randomUUID()
+    const newId = generateId()
     const next: Layer[] = [{ id: newId, name: 'Layer 1', visible: true, frames: newFrames }]
     setLayersState(next)
     layersRef.current = next
@@ -275,7 +276,7 @@ export function useAppState() {
   // ── Guide operations ──────────────────────────────────────────────────────
   const addGuide = useCallback((axis: 'h' | 'v') => {
     setGuides(g => [...g, {
-      id: crypto.randomUUID(),
+      id: generateId(),
       axis,
       position: axis === 'v' ? Math.floor(CANVAS_W / 2) : Math.floor(CANVAS_H / 2),
     }])
@@ -293,7 +294,7 @@ export function useAppState() {
   const addLayer = useCallback(() => {
     const count = layersRef.current[0]?.frames.length ?? 1
     const newLayer: Layer = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: `Layer ${layersRef.current.length + 1}`,
       visible: true,
       frames: Array.from({ length: count }, blankFrame),
@@ -430,7 +431,7 @@ export function useAppState() {
   // ── Stamp CRUD ────────────────────────────────────────────────────────────
   const createStamp = useCallback((name: string, width: number, height: number) => {
     const newStamp: Stamp = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name,
       width,
       height,

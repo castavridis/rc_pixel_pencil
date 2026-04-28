@@ -1,4 +1,5 @@
 import { PixelBuffer, Layer, Stamp, CANVAS_W, CANVAS_H } from '../types'
+import { generateId } from './uuid'
 
 const DB_NAME = 'pixel-display-studio'
 const DB_VERSION = 2
@@ -102,7 +103,7 @@ export async function loadFromIndexedDB(): Promise<LoadedState | null> {
           if (raw.length === 0) { resolve(null); return }
           resolve({
             layers: [{
-              id: crypto.randomUUID(),
+              id: generateId(),
               name: 'Layer 1',
               visible: true,
               frames: raw.map(decodeFrame),
