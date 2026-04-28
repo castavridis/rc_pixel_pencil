@@ -249,8 +249,8 @@ export function TopBar({
             R:
             <input
               type="range"
-              min={2}
-              max={500}
+              min={1}
+              max={5}
               step={1}
               value={bloom.radius}
               onChange={e => setBloom({ ...bloom, radius: parseInt(e.target.value) })}

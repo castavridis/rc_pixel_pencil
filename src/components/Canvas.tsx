@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react'
-import { BloomSettings, ToolId, Stamp, Guide, Layer, ReferenceImageSettings, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
+import { BloomSettings, ToolId, Stamp, Guide, Layer, ReferenceImageSettings, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H, GLOW_PAD } from '../types'
 import { renderGlow, clearGlow } from '../lib/glow'
 
 interface CanvasProps {
@@ -377,7 +377,7 @@ export function Canvas({
       const pc = pixelsCanvasRef.current
       const bc = bloomCanvasRef.current
       if (pc && bc) {
-        if (b.enabled) renderGlow(pc, bc, b, zoomRef.current)
+        if (b.enabled) renderGlow(pc, bc, b)
         else clearGlow(bc)
       }
       drawOverlay()
@@ -450,7 +450,11 @@ export function Canvas({
   }
 
   const bloomCanvasStyle: React.CSSProperties = {
-    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+    position: 'absolute',
+    top: -GLOW_PAD * zoom,
+    left: -GLOW_PAD * zoom,
+    width: (CANVAS_W + GLOW_PAD * 2) * zoom,
+    height: (CANVAS_H + GLOW_PAD * 2) * zoom,
   }
 
   const wrapperW = CANVAS_W * zoom
@@ -478,7 +482,7 @@ export function Canvas({
         <canvas ref={refCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={onionCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={pixelsCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
-        <canvas ref={bloomCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={bloomCanvasStyle} />
+        <canvas ref={bloomCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W + GLOW_PAD * 2} height={CANVAS_H + GLOW_PAD * 2} style={bloomCanvasStyle} />
         <canvas
           ref={overlayCanvasRef}
           width={wrapperW}

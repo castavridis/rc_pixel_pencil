@@ -1,6 +1,7 @@
 export const CANVAS_W = 128
 export const CANVAS_H = 64
 export const MAX_FRAMES = 24
+export const GLOW_PAD = 3
 
 export type PixelBuffer = Uint8Array   // length CANVAS_W * CANVAS_H
 export type ToolId = 'pencil' | 'eraser' | 'select' | 'stamp'

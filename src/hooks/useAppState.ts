@@ -18,7 +18,7 @@ function makeInitialLayer(): Layer {
 const DEFAULT_BLOOM: BloomSettings = {
   enabled: false,
   intensity: 0.5,
-  radius: 8,
+  radius: 3,
 }
 
 export function useAppState() {
