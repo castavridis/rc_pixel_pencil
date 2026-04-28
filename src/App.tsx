@@ -4,13 +4,15 @@ import { Canvas } from './components/Canvas'
 import { Timeline } from './components/Timeline'
 import { StatusBar } from './components/StatusBar'
 import { LibraryPanel } from './components/LibraryPanel'
+import { SaveDialog } from './components/SaveDialog'
 import { LayerPanel } from './components/LayerPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { StampPanel } from './components/StampPanel'
 import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
-import { PixelBuffer, Layer } from './types'
+import { PixelBuffer, Drawing } from './types'
+import { drawingToLayers } from './lib/supabase'
 import './App.css'
 
 export default function App() {
@@ -20,6 +22,8 @@ export default function App() {
   const [cursorY, setCursorY] = useState<number | null>(null)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showLayers, setShowLayers] = useState(false)
+  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
 
   const pixelsCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const bloomCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -145,12 +149,18 @@ export default function App() {
     if (hasContent && !confirm('Discard current work and start fresh?')) return
     history.clearAll()
     state.clearCanvas()
+    setCurrentDrawing(null)
   }, [state, history])
 
-  const handleLoadFromLibrary = useCallback((layers: Layer[]) => {
+  const handleLoadFromLibrary = useCallback((drawing: Drawing) => {
     history.clearAll()
-    state.loadLayers(layers)
+    state.loadLayers(drawingToLayers(drawing))
+    setCurrentDrawing(drawing)
   }, [state, history])
+
+  const handleSave = useCallback(() => {
+    setShowSaveDialog(true)
+  }, [])
 
   const handleDeleteHoveredGuide = useCallback(() => {
     if (state.guidesLocked) return
@@ -209,6 +219,11 @@ export default function App() {
       }
 
       if (e.ctrlKey || e.metaKey) {
+        if (e.key === 's') {
+          e.preventDefault()
+          handleSave()
+          return
+        }
         if (e.key === 'z' && !e.shiftKey) {
           e.preventDefault()
           handleUndo()
@@ -304,7 +319,7 @@ export default function App() {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
     }
-  }, [state, history, tools, handleUndo, handleRedo, handleImportFrame, handleFitZoom, handleDeleteHoveredGuide])
+  }, [state, history, tools, handleUndo, handleRedo, handleImportFrame, handleFitZoom, handleDeleteHoveredGuide, handleSave])
 
   if (!state.isLoaded) {
     return <div className="loading">Loading…</div>
@@ -364,6 +379,8 @@ export default function App() {
         onCancelPaste={state.cancelPaste}
         smartErase={state.smartErase}
         onSetSmartErase={state.setSmartErase}
+        currentDrawingName={currentDrawing?.name ?? null}
+        onSave={handleSave}
         mirrorX={state.mirrorX}
         onSetMirrorX={state.setMirrorX}
         altDown={altDown}
@@ -477,6 +494,14 @@ export default function App() {
           layers={state.layers}
           onLoad={handleLoadFromLibrary}
           onClose={() => setShowLibrary(false)}
+        />
+      )}
+      {showSaveDialog && (
+        <SaveDialog
+          currentDrawing={currentDrawing}
+          layers={state.layers}
+          onSaved={drawing => setCurrentDrawing(drawing)}
+          onClose={() => setShowSaveDialog(false)}
         />
       )}
     </div>

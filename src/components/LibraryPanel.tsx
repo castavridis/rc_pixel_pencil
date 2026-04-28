@@ -6,14 +6,13 @@ import {
   saveDrawing,
   updateDrawing,
   deleteDrawing,
-  drawingToLayers,
   drawingFrameCount,
   drawingLayerCount,
 } from '../lib/supabase'
 
 interface LibraryPanelProps {
   layers: Layer[]
-  onLoad: (layers: Layer[]) => void
+  onLoad: (drawing: Drawing) => void
   onClose: () => void
 }
 
@@ -58,7 +57,7 @@ export function LibraryPanel({ layers, onLoad, onClose }: LibraryPanelProps) {
   }
 
   const handleLoad = (drawing: Drawing) => {
-    onLoad(drawingToLayers(drawing))
+    onLoad(drawing)
     onClose()
   }
 

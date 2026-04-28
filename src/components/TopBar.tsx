@@ -58,6 +58,8 @@ interface TopBarProps {
   onCancelPaste: () => void
   smartErase: boolean
   onSetSmartErase: (v: boolean) => void
+  currentDrawingName: string | null
+  onSave: () => void
   mirrorX: boolean
   onSetMirrorX: (v: boolean) => void
   altDown: boolean
@@ -116,6 +118,8 @@ export function TopBar({
   onCancelPaste,
   smartErase,
   onSetSmartErase,
+  currentDrawingName,
+  onSave,
   mirrorX,
   onSetMirrorX,
   altDown,
@@ -392,6 +396,12 @@ export function TopBar({
           </button>
           <button onClick={handleExportPNG} title="Export current frame as PNG">
             Export PNG
+          </button>
+          <button
+            onClick={onSave}
+            title={currentDrawingName ? `Save "${currentDrawingName}"` : 'Save to cloud library'}
+          >
+            Save
           </button>
           <button onClick={onOpenLibrary} title="Open cloud library">
             Library

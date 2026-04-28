@@ -664,6 +664,94 @@ button.danger:hover:not(:disabled) {
 }
 
 /* ── Library Panel ────────────────────────────────────────────────── */
+.save-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.save-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.save-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.save-dialog-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save-dialog-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.save-dialog-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.save-dialog-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  height: var(--btn-h);
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
+
+.save-dialog-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.save-dialog-error {
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: 4px;
+}
+
+.save-dialog-unconfigured {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.save-dialog-unconfigured code {
+  font-family: inherit;
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 2px;
+  color: var(--accent);
+}
+
+.save-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
