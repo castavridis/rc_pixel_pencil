@@ -121,10 +121,7 @@ async function supabaseFetch(
 }
 
 export async function listDrawings(): Promise<Drawing[]> {
-  const deviceId = getDeviceId()
-  const res = await supabaseFetch(
-    `drawings?device_id=eq.${encodeURIComponent(deviceId)}&order=updated_at.desc`,
-  )
+  const res = await supabaseFetch('drawings?order=updated_at.desc')
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
