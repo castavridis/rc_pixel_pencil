@@ -3,7 +3,7 @@ import { strToU8, zipSync } from 'fflate'
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
+export function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
   const out = new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
   for (const layer of layers) {
     if (!layer.visible) continue

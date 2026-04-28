@@ -30,6 +30,8 @@ interface TopBarProps {
   onSetGuidesLocked: (v: boolean) => void
   showLayers: boolean
   onToggleLayers: () => void
+  showPreview: boolean
+  onTogglePreview: () => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
   referenceImage: ReferenceImageSettings | null
@@ -65,6 +67,8 @@ export function TopBar({
   onSetGuidesLocked,
   showLayers,
   onToggleLayers,
+  showPreview,
+  onTogglePreview,
   pixelsCanvasRef,
   bloomCanvasRef,
   referenceImage,
@@ -291,6 +295,11 @@ export function TopBar({
             onClick={onToggleLayers}
             title="Toggle layer panel"
           >Layers</button>
+          <button
+            className={showPreview ? 'active' : ''}
+            onClick={onTogglePreview}
+            title="Toggle 1x preview"
+          >1x</button>
           <button onClick={() => refImageInputRef.current?.click()} title="Load reference image overlay">
             Ref Image
           </button>

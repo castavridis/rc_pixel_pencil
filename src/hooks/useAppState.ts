@@ -64,6 +64,7 @@ export function useAppState() {
   const [referenceImage, setReferenceImage] = useState<ReferenceImageSettings | null>(null)
   const [canvasColor, setCanvasColor] = useState('#20242d')
   const [pixelColor, setPixelColor] = useState('#d2e1ff')
+  const [showPreview, setShowPreview] = useState(true)
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const selectionRef = useRef<SelectionRect | null>(null)
@@ -447,6 +448,8 @@ export function useAppState() {
     setCanvasColor,
     pixelColor,
     setPixelColor,
+    showPreview,
+    setShowPreview,
     // Selection
     selection,
     setSelection,

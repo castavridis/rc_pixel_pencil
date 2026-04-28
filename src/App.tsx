@@ -5,6 +5,7 @@ import { Timeline } from './components/Timeline'
 import { StatusBar } from './components/StatusBar'
 import { LibraryPanel } from './components/LibraryPanel'
 import { LayerPanel } from './components/LayerPanel'
+import { PreviewPanel } from './components/PreviewPanel'
 import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
@@ -309,6 +310,8 @@ export default function App() {
         onSetGuidesLocked={state.setGuidesLocked}
         showLayers={showLayers}
         onToggleLayers={() => setShowLayers(v => !v)}
+        showPreview={state.showPreview}
+        onTogglePreview={() => state.setShowPreview(!state.showPreview)}
         pixelsCanvasRef={pixelsCanvasRef}
         bloomCanvasRef={bloomCanvasRef}
         referenceImage={state.referenceImage}
@@ -355,6 +358,15 @@ export default function App() {
           selection={state.selection}
           floatingPaste={state.floatingPaste}
         />
+        {state.showPreview && (
+          <PreviewPanel
+            layers={state.layers}
+            currentFrame={state.currentFrame}
+            pixelColor={state.pixelColor}
+            canvasColor={state.canvasColor}
+            onClose={() => state.setShowPreview(false)}
+          />
+        )}
         {showLayers && (
           <LayerPanel
             layers={state.layers}
