@@ -25,6 +25,7 @@ interface UseToolsOptions {
   onCommitPaste: () => void
   onMoveGuide: (id: string, position: number) => void
   onDeleteGuide: (id: string) => void
+  smartErase: boolean
 }
 
 export function useTools(opts: UseToolsOptions) {
@@ -35,6 +36,10 @@ export function useTools(opts: UseToolsOptions) {
   const panStartRef = useRef<{ mx: number; my: number } | null>(null)
   const spaceDownRef = useRef(false)
   const shiftDownRef = useRef(false)
+  const strokeEraseRef = useRef(false)
+  const activeTouchIdsRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const twoFingerPanActiveRef = useRef(false)
+  const twoFingerCentroidRef = useRef<{ x: number; y: number } | null>(null)
   const guideDragRef = useRef<{ id: string; axis: 'h' | 'v'; pendingDelete: boolean } | null>(null)
   const refDragRef = useRef<{ startClientX: number; startClientY: number; startImgX: number; startImgY: number } | null>(null)
   // Selection drag
@@ -108,6 +113,23 @@ export function useTools(opts: UseToolsOptions) {
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>, tool: ToolId) => {
     if (opts.isPlaying) return
     e.currentTarget.setPointerCapture(e.pointerId)
+
+    // Two-finger touch = pan
+    if (e.pointerType === 'touch') {
+      activeTouchIdsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (activeTouchIdsRef.current.size >= 2) {
+        isDrawingRef.current = false
+        lastPxRef.current = null
+        drawStartRef.current = null
+        twoFingerPanActiveRef.current = true
+        isPanningRef.current = true
+        setIsPanning(true)
+        const pts = [...activeTouchIdsRef.current.values()]
+        twoFingerCentroidRef.current = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+        return
+      }
+      if (twoFingerPanActiveRef.current) return
+    }
 
     // Middle mouse or Space+left = pan
     if (e.button === 1 || (e.button === 0 && spaceDownRef.current)) {
@@ -185,7 +207,14 @@ export function useTools(opts: UseToolsOptions) {
     const buf = frames[frameIndex].slice() as PixelBuffer
     opts.pushHistory(frameIndex, buf)
 
-    const val: 0 | 1 | 2 = tool === 'eraser' ? 0 : (opts.isAltDown() ? 2 : 1)
+    const currentVal = buf[y * CANVAS_W + x]
+    const tapOnFilled = tool === 'pencil' && opts.smartErase && currentVal !== 0
+    strokeEraseRef.current = tapOnFilled
+    const val: 0 | 1 | 2 = tool === 'eraser'
+      ? 0
+      : tapOnFilled
+        ? 0
+        : (opts.isAltDown() ? 2 : 1)
     const size = tool === 'eraser' ? opts.eraserSize : 1
 
     if (size > 1) fillSquare(buf, x, y, size, val)
@@ -197,6 +226,19 @@ export function useTools(opts: UseToolsOptions) {
   }, [opts])
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>, tool: ToolId) => {
+    if (e.pointerType === 'touch' && activeTouchIdsRef.current.has(e.pointerId)) {
+      activeTouchIdsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    }
+    if (twoFingerPanActiveRef.current && activeTouchIdsRef.current.size >= 2) {
+      const pts = [...activeTouchIdsRef.current.values()]
+      const cx = (pts[0].x + pts[1].x) / 2
+      const cy = (pts[0].y + pts[1].y) / 2
+      const prev = twoFingerCentroidRef.current
+      if (prev) onPanRef.current?.(cx - prev.x, cy - prev.y)
+      twoFingerCentroidRef.current = { x: cx, y: cy }
+      return
+    }
+
     if (isPanningRef.current && panStartRef.current) {
       const dx = e.clientX - panStartRef.current.mx
       const dy = e.clientY - panStartRef.current.my
@@ -291,7 +333,11 @@ export function useTools(opts: UseToolsOptions) {
     const frameIndex = opts.getCurrentFrame()
     const frames = opts.getFrames()
     const buf = frames[frameIndex].slice() as PixelBuffer
-    const val: 0 | 1 | 2 = tool === 'eraser' ? 0 : (opts.isAltDown() ? 2 : 1)
+    const val: 0 | 1 | 2 = tool === 'eraser'
+      ? 0
+      : strokeEraseRef.current
+        ? 0
+        : (opts.isAltDown() ? 2 : 1)
     const size = tool === 'eraser' ? opts.eraserSize : 1
 
     if (lastPxRef.current) {
@@ -314,7 +360,19 @@ export function useTools(opts: UseToolsOptions) {
     lastPxRef.current = { x: cx, y: cy }
   }, [opts, hoveredGuideAxis])
 
-  const onPointerUp = useCallback((_e: React.PointerEvent<HTMLElement>) => {
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === 'touch') {
+      activeTouchIdsRef.current.delete(e.pointerId)
+      if (activeTouchIdsRef.current.size === 0) {
+        twoFingerPanActiveRef.current = false
+        twoFingerCentroidRef.current = null
+        isPanningRef.current = false
+        setIsPanning(false)
+      }
+      if (twoFingerPanActiveRef.current) return
+    }
+
+    strokeEraseRef.current = false
     isDrawingRef.current = false
     isPanningRef.current = false
     setIsPanning(false)

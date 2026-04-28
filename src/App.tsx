@@ -72,6 +72,7 @@ export default function App() {
     onSetSelection: state.setSelection,
     onMoveFloating: state.moveFloatingPaste,
     onCommitPaste: state.commitPaste,
+    smartErase: state.smartErase,
   })
 
   // Connect pan callback
@@ -348,6 +349,16 @@ export default function App() {
         showStamps={state.showStamps}
         onToggleStamps={() => state.setShowStamps(!state.showStamps)}
         activeStampName={getActiveStamp()?.name ?? null}
+        selection={state.selection}
+        clipboard={state.clipboard}
+        floatingPaste={state.floatingPaste}
+        onCopy={() => { if (state.selection) state.copySelection() }}
+        onCut={() => { if (state.selection) state.cutSelection() }}
+        onPaste={() => { if (state.clipboard) state.pasteClipboard() }}
+        onCommitPaste={state.commitPaste}
+        onCancelPaste={state.cancelPaste}
+        smartErase={state.smartErase}
+        onSetSmartErase={state.setSmartErase}
       />
 
       <div className="canvas-area" ref={viewportRef}>

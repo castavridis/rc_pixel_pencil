@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ToolId, BloomSettings, PixelBuffer, Layer, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
+import { ToolId, BloomSettings, PixelBuffer, Layer, ReferenceImageSettings, SelectionRect, Clipboard, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
 import { downloadSVG, downloadFramesSVGZip, importSVG } from '../lib/svg'
 import { exportAnimatedGIF, exportPNG } from '../lib/gif'
 
@@ -45,6 +45,16 @@ interface TopBarProps {
   onSetCanvasColor: (v: string) => void
   pixelColor: string
   onSetPixelColor: (v: string) => void
+  selection: SelectionRect | null
+  clipboard: Clipboard | null
+  floatingPaste: FloatingPaste | null
+  onCopy: () => void
+  onCut: () => void
+  onPaste: () => void
+  onCommitPaste: () => void
+  onCancelPaste: () => void
+  smartErase: boolean
+  onSetSmartErase: (v: boolean) => void
 }
 
 export function TopBar({
@@ -87,6 +97,16 @@ export function TopBar({
   onSetCanvasColor,
   pixelColor,
   onSetPixelColor,
+  selection,
+  clipboard,
+  floatingPaste,
+  onCopy,
+  onCut,
+  onPaste,
+  onCommitPaste,
+  onCancelPaste,
+  smartErase,
+  onSetSmartErase,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -180,6 +200,26 @@ export function TopBar({
             onClick={() => setTool('stamp')}
             title="Stamp tool (T)"
           >T</button>
+          {tool === 'pencil' && (
+            <button
+              className={smartErase ? 'active' : ''}
+              onClick={() => onSetSmartErase(!smartErase)}
+              title="Smart erase: tap a filled pixel to erase it"
+            >Smart&#8209;E</button>
+          )}
+          {tool === 'select' && (
+            <>
+              <button onClick={onCopy} disabled={!selection} title="Copy selection (Ctrl+C)">Copy</button>
+              <button onClick={onCut} disabled={!selection} title="Cut selection (Ctrl+X)">Cut</button>
+              <button onClick={onPaste} disabled={!clipboard} title="Paste (Ctrl+V)">Paste</button>
+              {floatingPaste && (
+                <>
+                  <button onClick={onCommitPaste} title="Commit paste (Enter)">&#10003;</button>
+                  <button onClick={onCancelPaste} title="Cancel paste (Esc)">&#10005;</button>
+                </>
+              )}
+            </>
+          )}
           {tool === 'stamp' && (
             <span style={{ fontSize: 10, color: 'var(--text-dim)', alignSelf: 'center' }}>
               {activeStampName ?? 'no stamp'}

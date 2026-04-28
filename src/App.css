@@ -155,6 +155,9 @@ button.danger:hover:not(:disabled) {
   position: relative;
   overflow: hidden;
   background: #0a0a0a;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .canvas-viewport {
@@ -162,6 +165,9 @@ button.danger:hover:not(:disabled) {
   height: 100%;
   position: relative;
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .canvas-wrapper {
