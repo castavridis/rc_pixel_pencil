@@ -170,26 +170,39 @@ export function Canvas({
       if (!onionEnabledRef.current) return
 
       const fi = currentFrameRef.current
-      // Use active layer for onion skinning
       const activeLayer = layersRef.current.find(l => l.id === activeLayerIdRef.current) ?? layersRef.current[0]
-      const prev = activeLayer.frames[fi - 1]
-      const next = activeLayer.frames[fi + 1]
 
-      if (prev) {
-        ctx.globalAlpha = 0.35
+      // Previous frames: blue, stepping from close (bright) to far (dim)
+      const prevOffsets: { offset: number; alpha: number }[] = [
+        { offset: -1, alpha: 0.35 },
+        { offset: -2, alpha: 0.20 },
+        { offset: -3, alpha: 0.10 },
+      ]
+      // Next frames: gray, stepping from close (bright) to far (dim)
+      const nextOffsets: { offset: number; alpha: number }[] = [
+        { offset: +1, alpha: 0.25 },
+        { offset: +2, alpha: 0.12 },
+      ]
+
+      for (const { offset, alpha } of prevOffsets) {
+        const frame = activeLayer.frames[fi + offset]
+        if (!frame) continue
+        ctx.globalAlpha = alpha
         ctx.fillStyle = 'rgb(70,130,255)'
         for (let y = 0; y < CANVAS_H; y++) {
           for (let x = 0; x < CANVAS_W; x++) {
-            if (prev[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
+            if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
           }
         }
       }
-      if (next) {
-        ctx.globalAlpha = 0.25
+      for (const { offset, alpha } of nextOffsets) {
+        const frame = activeLayer.frames[fi + offset]
+        if (!frame) continue
+        ctx.globalAlpha = alpha
         ctx.fillStyle = 'rgb(160,160,160)'
         for (let y = 0; y < CANVAS_H; y++) {
           for (let x = 0; x < CANVAS_W; x++) {
-            if (next[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
+            if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
           }
         }
       }
