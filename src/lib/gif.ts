@@ -1,6 +1,19 @@
-import { PixelBuffer, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, Layer, CANVAS_W, CANVAS_H } from '../types'
 import { downloadBlob } from './svg'
 import { GIFEncoder, applyPalette } from 'gifenc'
+
+function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
+  const out = new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
+  for (const layer of layers) {
+    if (!layer.visible) continue
+    const frame = layer.frames[frameIndex]
+    if (!frame) continue
+    for (let i = 0; i < out.length; i++) {
+      if (frame[i]) out[i] = 1
+    }
+  }
+  return out
+}
 
 function pixelBufferToRGBA(frame: PixelBuffer): Uint8Array {
   const rgba = new Uint8Array(CANVAS_W * CANVAS_H * 4)
@@ -14,12 +27,14 @@ function pixelBufferToRGBA(frame: PixelBuffer): Uint8Array {
   return rgba
 }
 
-export async function exportAnimatedGIF(frames: PixelBuffer[], fps: number): Promise<void> {
+export async function exportAnimatedGIF(layers: Layer[], fps: number): Promise<void> {
   const encoder = GIFEncoder()
   const palette = [[0, 0, 0], [255, 255, 255]]
   const delay = Math.round(1000 / fps)
+  const frameCount = layers[0]?.frames.length ?? 1
 
-  for (const frame of frames) {
+  for (let fi = 0; fi < frameCount; fi++) {
+    const frame = compositeLayers(layers, fi)
     const rgba = pixelBufferToRGBA(frame)
     const indexed = applyPalette(rgba, palette)
     encoder.writeFrame(indexed, CANVAS_W, CANVAS_H, { palette, delay, repeat: 0 })

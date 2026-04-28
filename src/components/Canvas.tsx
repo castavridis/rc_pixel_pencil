@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useCallback } from 'react'
-import { PixelBuffer, BloomSettings, ToolId, Guide, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
-import { renderBloom, clearBloom } from '../lib/bloom'
+import { BloomSettings, ToolId, Guide, Layer, ReferenceImageSettings, SelectionRect, FloatingPaste, CANVAS_W, CANVAS_H } from '../types'
+import { renderGlow, clearGlow } from '../lib/glow'
 
 interface CanvasProps {
-  frames: PixelBuffer[]
+  layers: Layer[]
+  activeLayerId: string
   currentFrame: number
   zoom: number
   pan: { x: number; y: number }
@@ -33,10 +34,13 @@ interface CanvasProps {
   canvasColor: string
   pixelColor: string
   onScaleReferenceImage: (scale: number) => void
+  selection: SelectionRect | null
+  floatingPaste: FloatingPaste | null
 }
 
 export function Canvas({
-  frames,
+  layers,
+  activeLayerId,
   currentFrame,
   zoom,
   pan,
@@ -66,6 +70,8 @@ export function Canvas({
   canvasColor,
   pixelColor,
   onScaleReferenceImage,
+  selection,
+  floatingPaste,
 }: CanvasProps) {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const refCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -73,15 +79,18 @@ export function Canvas({
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number>(0)
+  const dashOffsetRef = useRef(0)
 
-  // Refs for RAF loop (avoid stale closures)
-  const framesRef = useRef(frames)
+  // Refs for RAF loop
+  const layersRef = useRef(layers)
+  const activeLayerIdRef = useRef(activeLayerId)
   const currentFrameRef = useRef(currentFrame)
   const bloomRef = useRef(bloom)
   const showGridRef = useRef(showGrid)
   const onionEnabledRef = useRef(onionEnabled)
   const zoomRef = useRef(zoom)
   const guidesRef = useRef(guides)
+  const guidesLockedRef = useRef(guidesLocked)
   const selectedGuideIdRef = useRef(selectedGuideId)
   const pendingDeleteGuideIdRef = useRef(pendingDeleteGuideId)
   const toolRef = useRef(tool)
@@ -89,10 +98,12 @@ export function Canvas({
   const cursorPxRef = useRef<{ x: number; y: number } | null>(null)
   const referenceImageRef = useRef(referenceImage)
   const refImgElementRef = useRef<HTMLImageElement | null>(null)
-  const guidesLockedRef = useRef(guidesLocked)
   const pixelColorRef = useRef(pixelColor)
+  const selectionRef = useRef(selection)
+  const floatingPasteRef = useRef(floatingPaste)
 
-  useEffect(() => { framesRef.current = frames }, [frames])
+  useEffect(() => { layersRef.current = layers }, [layers])
+  useEffect(() => { activeLayerIdRef.current = activeLayerId }, [activeLayerId])
   useEffect(() => { currentFrameRef.current = currentFrame }, [currentFrame])
   useEffect(() => { bloomRef.current = bloom }, [bloom])
   useEffect(() => { showGridRef.current = showGrid }, [showGrid])
@@ -105,6 +116,8 @@ export function Canvas({
   useEffect(() => { toolRef.current = tool }, [tool])
   useEffect(() => { eraserSizeRef.current = eraserSize }, [eraserSize])
   useEffect(() => { pixelColorRef.current = pixelColor }, [pixelColor])
+  useEffect(() => { selectionRef.current = selection }, [selection])
+  useEffect(() => { floatingPasteRef.current = floatingPaste }, [floatingPaste])
   useEffect(() => {
     referenceImageRef.current = referenceImage
     if (referenceImage) {
@@ -118,7 +131,7 @@ export function Canvas({
     }
   }, [referenceImage])
 
-  // Redraw background whenever canvasColor changes
+  // Background canvas — reactive to canvasColor
   useEffect(() => {
     const canvas = bgCanvasRef.current
     if (!canvas) return
@@ -157,11 +170,11 @@ export function Canvas({
       if (!onionEnabledRef.current) return
 
       const fi = currentFrameRef.current
-      const fs = framesRef.current
-      const prev = fs[fi - 1]
-      const next = fs[fi + 1]
+      // Use active layer for onion skinning
+      const activeLayer = layersRef.current.find(l => l.id === activeLayerIdRef.current) ?? layersRef.current[0]
+      const prev = activeLayer.frames[fi - 1]
+      const next = activeLayer.frames[fi + 1]
 
-      // Previous frame: blue-ish
       if (prev) {
         ctx.globalAlpha = 0.35
         ctx.fillStyle = 'rgb(70,130,255)'
@@ -171,7 +184,6 @@ export function Canvas({
           }
         }
       }
-      // Next frame: gray
       if (next) {
         ctx.globalAlpha = 0.25
         ctx.fillStyle = 'rgb(160,160,160)'
@@ -190,14 +202,21 @@ export function Canvas({
       const ctx = canvas.getContext('2d')!
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
       const fi = currentFrameRef.current
-      const frame = framesRef.current[fi]
-      if (!frame) return
+      const activeId = activeLayerIdRef.current
       ctx.fillStyle = pixelColorRef.current
-      for (let y = 0; y < CANVAS_H; y++) {
-        for (let x = 0; x < CANVAS_W; x++) {
-          if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
+
+      for (const layer of layersRef.current) {
+        if (!layer.visible) continue
+        const frame = layer.frames[fi]
+        if (!frame) continue
+        ctx.globalAlpha = layer.id === activeId ? 1.0 : 0.4
+        for (let y = 0; y < CANVAS_H; y++) {
+          for (let x = 0; x < CANVAS_W; x++) {
+            if (frame[y * CANVAS_W + x]) ctx.fillRect(x, y, 1, 1)
+          }
         }
       }
+      ctx.globalAlpha = 1
     }
 
     function drawOverlay() {
@@ -214,12 +233,10 @@ export function Canvas({
         ctx.lineWidth = 1
         ctx.beginPath()
         for (let x = 0; x <= CANVAS_W; x++) {
-          ctx.moveTo(x * z, 0)
-          ctx.lineTo(x * z, H)
+          ctx.moveTo(x * z, 0); ctx.lineTo(x * z, H)
         }
         for (let y = 0; y <= CANVAS_H; y++) {
-          ctx.moveTo(0, y * z)
-          ctx.lineTo(W, y * z)
+          ctx.moveTo(0, y * z); ctx.lineTo(W, y * z)
         }
         ctx.stroke()
       }
@@ -239,19 +256,50 @@ export function Canvas({
         ctx.setLineDash([4, 4])
         ctx.beginPath()
         if (g.axis === 'v') {
-          ctx.moveTo(g.position * z, 0)
-          ctx.lineTo(g.position * z, H)
+          ctx.moveTo(g.position * z, 0); ctx.lineTo(g.position * z, H)
         } else {
-          ctx.moveTo(0, g.position * z)
-          ctx.lineTo(W, g.position * z)
+          ctx.moveTo(0, g.position * z); ctx.lineTo(W, g.position * z)
         }
         ctx.stroke()
         ctx.setLineDash([])
       }
 
+      // Selection rectangle
+      const sel = selectionRef.current
+      if (sel && toolRef.current === 'select') {
+        dashOffsetRef.current = (dashOffsetRef.current - 0.3) % 8
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 4])
+        ctx.lineDashOffset = dashOffsetRef.current
+        ctx.strokeRect(sel.x * z + 0.5, sel.y * z + 0.5, sel.w * z, sel.h * z)
+        ctx.setLineDash([])
+        ctx.lineDashOffset = 0
+      }
+
+      // Floating paste preview
+      const fp = floatingPasteRef.current
+      if (fp) {
+        ctx.fillStyle = pixelColorRef.current
+        ctx.globalAlpha = 0.75
+        for (let py = 0; py < fp.h; py++) {
+          for (let px = 0; px < fp.w; px++) {
+            if (fp.buf[py * fp.w + px]) {
+              ctx.fillRect((fp.x + px) * z, (fp.y + py) * z, z, z)
+            }
+          }
+        }
+        ctx.globalAlpha = 1
+        ctx.strokeStyle = 'rgba(255,220,0,0.85)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([2, 2])
+        ctx.strokeRect(fp.x * z + 0.5, fp.y * z + 0.5, fp.w * z, fp.h * z)
+        ctx.setLineDash([])
+      }
+
       // Cursor preview
       const cur = cursorPxRef.current
-      if (cur) {
+      if (cur && toolRef.current !== 'select') {
         const t = toolRef.current
         const size = t === 'eraser' ? eraserSizeRef.current : 1
         const half = Math.floor(size / 2)
@@ -276,8 +324,8 @@ export function Canvas({
       const pc = pixelsCanvasRef.current
       const bc = bloomCanvasRef.current
       if (pc && bc) {
-        if (b.enabled) renderBloom(pc, bc, b, zoomRef.current)
-        else clearBloom(bc)
+        if (b.enabled) renderGlow(pc, bc, b, zoomRef.current)
+        else clearGlow(bc)
       }
       drawOverlay()
       rafRef.current = requestAnimationFrame(tick)
@@ -333,6 +381,8 @@ export function Canvas({
     cursor = 'grabbing'
   } else if (referenceImage && !referenceImage.locked) {
     cursor = 'grab'
+  } else if (tool === 'select') {
+    cursor = 'crosshair'
   } else if (hoveredGuideAxis === 'h') {
     cursor = 'ns-resize'
   } else if (hoveredGuideAxis === 'v') {
@@ -342,40 +392,26 @@ export function Canvas({
   }
 
   const pixelCanvasStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
+    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
     imageRendering: 'pixelated',
   }
 
-  // Bloom canvas must NOT have image-rendering: pixelated so the soft glow renders correctly
   const bloomCanvasStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
+    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
   }
 
   const wrapperW = CANVAS_W * zoom
   const wrapperH = CANVAS_H * zoom
 
   return (
-    <div
-      className="canvas-viewport"
-      onWheel={handleWheel}
-    >
+    <div className="canvas-viewport" onWheel={handleWheel}>
       <div
         ref={wrapperRef}
         className="canvas-wrapper"
         style={{
-          width: wrapperW,
-          height: wrapperH,
+          width: wrapperW, height: wrapperH,
           position: 'absolute',
-          left: '50%',
-          top: '50%',
+          left: '50%', top: '50%',
           transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px))`,
           cursor,
         }}
@@ -385,14 +421,11 @@ export function Canvas({
         onPointerLeave={handlePointerLeave}
         onContextMenu={handleContextMenu}
       >
-        {/* Pixel-art layers: physically 128×64, scaled by CSS+pixelated */}
         <canvas ref={bgCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={refCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={onionCanvasRef} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
         <canvas ref={pixelsCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={pixelCanvasStyle} />
-        {/* Bloom: smooth (not pixelated) so the blur gradient is preserved after CSS scale */}
         <canvas ref={bloomCanvasRef as React.RefObject<HTMLCanvasElement>} width={CANVAS_W} height={CANVAS_H} style={bloomCanvasStyle} />
-        {/* Overlay: screen-resolution canvas for grid, guides, cursor preview */}
         <canvas
           ref={overlayCanvasRef}
           width={wrapperW}

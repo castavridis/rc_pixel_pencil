@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ToolId, BloomSettings, PixelBuffer, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
+import { ToolId, BloomSettings, PixelBuffer, Layer, ReferenceImageSettings, CANVAS_W, CANVAS_H } from '../types'
 import { downloadSVG, downloadFramesSVGZip, importSVG } from '../lib/svg'
 import { exportAnimatedGIF, exportPNG } from '../lib/gif'
 
@@ -20,7 +20,7 @@ interface TopBarProps {
   onRedo: () => void
   canUndo: boolean
   canRedo: boolean
-  frames: PixelBuffer[]
+  layers: Layer[]
   currentFrame: number
   onImportFrame: (buf: PixelBuffer) => void
   onNew: () => void
@@ -28,6 +28,8 @@ interface TopBarProps {
   onAddGuide: (axis: 'h' | 'v') => void
   guidesLocked: boolean
   onSetGuidesLocked: (v: boolean) => void
+  showLayers: boolean
+  onToggleLayers: () => void
   pixelsCanvasRef: React.RefObject<HTMLCanvasElement | null>
   bloomCanvasRef: React.RefObject<HTMLCanvasElement | null>
   referenceImage: ReferenceImageSettings | null
@@ -53,7 +55,7 @@ export function TopBar({
   onRedo,
   canUndo,
   canRedo,
-  frames,
+  layers,
   currentFrame,
   onImportFrame,
   onNew,
@@ -61,6 +63,8 @@ export function TopBar({
   onAddGuide,
   guidesLocked,
   onSetGuidesLocked,
+  showLayers,
+  onToggleLayers,
   pixelsCanvasRef,
   bloomCanvasRef,
   referenceImage,
@@ -87,16 +91,16 @@ export function TopBar({
   }
 
   const handleExportSVG = () => {
-    downloadSVG(frames[currentFrame], `frame-${String(currentFrame + 1).padStart(2, '0')}.svg`)
+    downloadSVG(layers, currentFrame, `frame-${String(currentFrame + 1).padStart(2, '0')}.svg`)
   }
 
   const handleExportAllSVG = () => {
-    downloadFramesSVGZip(frames)
+    downloadFramesSVGZip(layers)
   }
 
   const handleExportGIF = async () => {
     try {
-      await exportAnimatedGIF(frames, 12)
+      await exportAnimatedGIF(layers, 12)
     } catch (err) {
       alert(`GIF export failed: ${err}`)
     }
@@ -139,7 +143,7 @@ export function TopBar({
 
   return (
     <div className="topbar">
-      {/* Row 1: tools + undo/redo + toggles + bloom + guides */}
+      {/* Row 1: tools + undo/redo + toggles + glow + guides */}
       <div className="topbar-row">
         <div className="topbar-group">
           <button
@@ -152,6 +156,11 @@ export function TopBar({
             onClick={() => setTool('eraser')}
             title="Eraser (E)"
           >E</button>
+          <button
+            className={tool === 'select' ? 'active' : ''}
+            onClick={() => setTool('select')}
+            title="Select (S)"
+          >S</button>
           {tool === 'eraser' && (
             <span className="eraser-sizes">
               {ERASER_SIZES.map(s => (
@@ -198,9 +207,9 @@ export function TopBar({
           <button
             className={bloom.enabled ? 'active' : ''}
             onClick={() => setBloom({ ...bloom, enabled: !bloom.enabled })}
-            title="Toggle bloom (B)"
-          >Bloom</button>
-          <label title="Bloom intensity">
+            title="Toggle glow (B)"
+          >Glow</button>
+          <label title="Glow intensity">
             I:
             <input
               type="range"
@@ -212,7 +221,7 @@ export function TopBar({
               disabled={!bloom.enabled}
             />
           </label>
-          <label title="Bloom radius">
+          <label title="Glow radius">
             R:
             <input
               type="range"
@@ -248,7 +257,7 @@ export function TopBar({
         </div>
       </div>
 
-      {/* Row 2: file actions */}
+      {/* Row 2: file actions + layers toggle */}
       <div className="topbar-row">
         <div className="topbar-group">
           <button onClick={onNew} title="New canvas">New</button>
@@ -277,6 +286,11 @@ export function TopBar({
           <button onClick={onOpenLibrary} title="Open cloud library">
             Library
           </button>
+          <button
+            className={showLayers ? 'active' : ''}
+            onClick={onToggleLayers}
+            title="Toggle layer panel"
+          >Layers</button>
           <button onClick={() => refImageInputRef.current?.click()} title="Load reference image overlay">
             Ref Image
           </button>

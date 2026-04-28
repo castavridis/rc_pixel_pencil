@@ -4,6 +4,7 @@ import { Canvas } from './components/Canvas'
 import { Timeline } from './components/Timeline'
 import { StatusBar } from './components/StatusBar'
 import { LibraryPanel } from './components/LibraryPanel'
+import { LayerPanel } from './components/LayerPanel'
 import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
@@ -16,6 +17,7 @@ export default function App() {
   const [cursorX, setCursorX] = useState<number | null>(null)
   const [cursorY, setCursorY] = useState<number | null>(null)
   const [showLibrary, setShowLibrary] = useState(false)
+  const [showLayers, setShowLayers] = useState(false)
 
   const pixelsCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const bloomCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -35,7 +37,8 @@ export default function App() {
     getFrames: state.getFrames,
     getCurrentFrame: state.getCurrentFrame,
     setFrame: state.setFrame,
-    pushHistory: history.pushHistory,
+    pushHistory: (frameIndex: number, buf: PixelBuffer) =>
+      history.pushPixel(state.getActiveLayerId(), frameIndex, buf),
     zoom: state.zoom,
     pan: state.pan,
     isPlaying: state.isPlaying,
@@ -46,6 +49,11 @@ export default function App() {
     onMoveGuide: state.moveGuide,
     onDeleteGuide: state.deleteGuide,
     onMoveReferenceImage: handleMoveReferenceImage,
+    selection: state.selection,
+    floatingPaste: state.floatingPaste,
+    onSetSelection: state.setSelection,
+    onMoveFloating: state.moveFloatingPaste,
+    onCommitPaste: state.commitPaste,
   })
 
   // Connect pan callback
@@ -81,26 +89,38 @@ export default function App() {
     state.setPan({ x: 0, y: 0 })
   }, [state])
 
+  const getCurrentPixel = useCallback(
+    (layerId: string, frameIdx: number): PixelBuffer | null => {
+      const layer = state.layers.find(l => l.id === layerId)
+      return layer?.frames[frameIdx] ?? null
+    },
+    [state.layers],
+  )
+
   const handleUndo = useCallback(() => {
-    const fi = state.currentFrame
-    const result = history.undo(fi, state.frames[fi])
-    if (result) state.setFrame(fi, result)
-  }, [state, history])
+    const entry = history.undo(getCurrentPixel, () => state.layers, () => state.activeLayerId)
+    if (!entry) return
+    if (entry.kind === 'pixel') state.setLayerFrame(entry.layerId, entry.frameIdx, entry.snapshot)
+    else state.restoreLayers(entry.snapshot, entry.activeId)
+  }, [state, history, getCurrentPixel])
 
   const handleRedo = useCallback(() => {
-    const fi = state.currentFrame
-    const result = history.redo(fi, state.frames[fi])
-    if (result) state.setFrame(fi, result)
-  }, [state, history])
+    const entry = history.redo(getCurrentPixel, () => state.layers, () => state.activeLayerId)
+    if (!entry) return
+    if (entry.kind === 'pixel') state.setLayerFrame(entry.layerId, entry.frameIdx, entry.snapshot)
+    else state.restoreLayers(entry.snapshot, entry.activeId)
+  }, [state, history, getCurrentPixel])
 
   const handleImportFrame = useCallback((buf: PixelBuffer) => {
-    const fi = state.currentFrame
-    history.pushHistory(fi, state.frames[fi])
+    const fi = state.getCurrentFrame()
+    const layerId = state.getActiveLayerId()
+    const frames = state.getFrames()
+    history.pushPixel(layerId, fi, frames[fi])
     state.setFrame(fi, buf)
   }, [state, history])
 
   const handleNew = useCallback(() => {
-    const hasContent = state.frames.some(f => f.some(v => v !== 0))
+    const hasContent = state.layers.some(l => l.frames.some(f => f.some(v => v !== 0)))
     if (hasContent && !confirm('Discard current work and start fresh?')) return
     history.clearAll()
     state.clearCanvas()
@@ -111,17 +131,46 @@ export default function App() {
     state.loadFrames(frames)
   }, [state, history])
 
-  // Delete the currently hovered guide (called from canvas right-click or Delete key)
   const handleDeleteHoveredGuide = useCallback(() => {
     if (state.guidesLocked) return
     const id = tools.getHoveredGuideId()
     if (id) state.deleteGuide(id)
   }, [tools, state])
 
+  // Layer ops wrapped with history push
+  const handleAddLayer = useCallback(() => {
+    history.pushLayers(state.layers, state.activeLayerId)
+    state.addLayer()
+  }, [history, state])
+
+  const handleDeleteLayer = useCallback((id: string) => {
+    history.pushLayers(state.layers, state.activeLayerId)
+    state.deleteLayer(id)
+  }, [history, state])
+
+  const handleMoveLayer = useCallback((id: string, dir: 'up' | 'down') => {
+    history.pushLayers(state.layers, state.activeLayerId)
+    state.moveLayer(id, dir)
+  }, [history, state])
+
+  const handleStampToAll = useCallback((id: string) => {
+    history.pushLayers(state.layers, state.activeLayerId)
+    state.stampLayerToAllFrames(id)
+  }, [history, state])
+
+  // Derive composited frames for LibraryPanel (active layer only for simplicity)
+  const activeLayerFrames = state.getFrames()
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const inputFocused = document.activeElement?.tagName === 'INPUT'
+
+      // Shift is a modifier — handle regardless of inputFocused
+      if (e.key === 'Shift') {
+        tools.setShiftDown(true)
+        return
+      }
 
       if (e.code === 'Space' && !inputFocused) {
         e.preventDefault()
@@ -129,7 +178,6 @@ export default function App() {
         return
       }
 
-      // Delete hovered guide
       if (e.key === 'Delete' && !inputFocused) {
         handleDeleteHoveredGuide()
         return
@@ -146,23 +194,39 @@ export default function App() {
           handleRedo()
           return
         }
-        if (e.key === 'c') {
+        if (e.key === 'c' && !inputFocused) {
           e.preventDefault()
-          import('./lib/svg').then(({ exportSVG }) => {
-            const svg = exportSVG(state.frames[state.currentFrame])
-            navigator.clipboard.writeText(svg).catch(() => {})
-          })
+          if (state.tool === 'select' && state.selection) {
+            state.copySelection()
+          } else {
+            import('./lib/svg').then(({ exportSVG }) => {
+              const frame = state.getFrames()[state.getCurrentFrame()]
+              const svg = exportSVG(frame)
+              navigator.clipboard.writeText(svg).catch(() => {})
+            })
+          }
           return
         }
-        if (e.key === 'v') {
+        if (e.key === 'x' && !inputFocused) {
           e.preventDefault()
-          navigator.clipboard.readText().then(async text => {
-            if (text.trim().startsWith('<svg') || text.includes('<svg')) {
-              const { importSVG } = await import('./lib/svg')
-              const buf = await importSVG(text)
-              handleImportFrame(buf)
-            }
-          }).catch(() => {})
+          if (state.tool === 'select' && state.selection) {
+            state.cutSelection()
+          }
+          return
+        }
+        if (e.key === 'v' && !inputFocused) {
+          e.preventDefault()
+          if (state.clipboard) {
+            state.pasteClipboard()
+          } else {
+            navigator.clipboard.readText().then(async text => {
+              if (text.trim().startsWith('<svg') || text.includes('<svg')) {
+                const { importSVG } = await import('./lib/svg')
+                const buf = await importSVG(text)
+                handleImportFrame(buf)
+              }
+            }).catch(() => {})
+          }
           return
         }
         return
@@ -173,6 +237,7 @@ export default function App() {
       switch (e.key) {
         case 'd': case 'D': state.setTool('pencil'); break
         case 'e': case 'E': state.setTool('eraser'); break
+        case 's': case 'S': state.setTool('select'); break
         case 'b': case 'B': state.setBloom({ ...state.bloom, enabled: !state.bloom.enabled }); break
         case 'g': case 'G': state.setShowGrid(!state.showGrid); break
         case 'o': case 'O': state.setOnionEnabled(!state.onionEnabled); break
@@ -180,19 +245,29 @@ export default function App() {
         case '2': state.setZoom(10); break
         case '3': state.setZoom(25); break
         case '0': handleFitZoom(); break
+        case 'Escape':
+          state.cancelPaste()
+          state.clearSelection()
+          break
+        case 'Enter':
+          if (state.floatingPaste) state.commitPaste()
+          break
         case 'ArrowLeft':
           e.preventDefault()
           state.setCurrentFrame(Math.max(0, state.currentFrame - 1))
           break
-        case 'ArrowRight':
+        case 'ArrowRight': {
           e.preventDefault()
-          state.setCurrentFrame(Math.min(state.frames.length - 1, state.currentFrame + 1))
+          const frameCount = state.layers[0]?.frames.length ?? 1
+          state.setCurrentFrame(Math.min(frameCount - 1, state.currentFrame + 1))
           break
+        }
       }
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') tools.setSpaceDown(false)
+      if (e.key === 'Shift') tools.setShiftDown(false)
     }
 
     document.addEventListener('keydown', onKeyDown)
@@ -222,9 +297,9 @@ export default function App() {
         setOnionEnabled={state.setOnionEnabled}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        canUndo={history.canUndo(state.currentFrame)}
-        canRedo={history.canRedo(state.currentFrame)}
-        frames={state.frames}
+        canUndo={history.canUndo()}
+        canRedo={history.canRedo()}
+        layers={state.layers}
         currentFrame={state.currentFrame}
         onImportFrame={handleImportFrame}
         onNew={handleNew}
@@ -232,6 +307,8 @@ export default function App() {
         onAddGuide={state.addGuide}
         guidesLocked={state.guidesLocked}
         onSetGuidesLocked={state.setGuidesLocked}
+        showLayers={showLayers}
+        onToggleLayers={() => setShowLayers(v => !v)}
         pixelsCanvasRef={pixelsCanvasRef}
         bloomCanvasRef={bloomCanvasRef}
         referenceImage={state.referenceImage}
@@ -244,7 +321,8 @@ export default function App() {
 
       <div className="canvas-area" ref={viewportRef}>
         <Canvas
-          frames={state.frames}
+          layers={state.layers}
+          activeLayerId={state.activeLayerId}
           currentFrame={state.currentFrame}
           zoom={state.zoom}
           pan={state.pan}
@@ -274,11 +352,27 @@ export default function App() {
           canvasColor={state.canvasColor}
           pixelColor={state.pixelColor}
           onScaleReferenceImage={handleScaleReferenceImage}
+          selection={state.selection}
+          floatingPaste={state.floatingPaste}
         />
+        {showLayers && (
+          <LayerPanel
+            layers={state.layers}
+            activeLayerId={state.activeLayerId}
+            currentFrame={state.currentFrame}
+            onSetActiveLayer={state.setActiveLayerId}
+            onAddLayer={handleAddLayer}
+            onDeleteLayer={handleDeleteLayer}
+            onMoveLayer={handleMoveLayer}
+            onRenameLayer={state.renameLayer}
+            onToggleVisible={state.toggleLayerVisible}
+            onStampToAll={handleStampToAll}
+          />
+        )}
       </div>
 
       <Timeline
-        frames={state.frames}
+        layers={state.layers}
         currentFrame={state.currentFrame}
         isPlaying={state.isPlaying}
         onSelectFrame={state.setCurrentFrame}
@@ -298,7 +392,7 @@ export default function App() {
 
       {showLibrary && (
         <LibraryPanel
-          frames={state.frames}
+          frames={activeLayerFrames}
           onLoad={handleLoadFromLibrary}
           onClose={() => setShowLibrary(false)}
         />

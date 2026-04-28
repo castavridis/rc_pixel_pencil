@@ -1,70 +1,77 @@
 import { useCallback, useRef } from 'react'
-import { PixelBuffer, MAX_FRAMES } from '../types'
+import { PixelBuffer, Layer } from '../types'
 
 const MAX_HISTORY = 100
 
-interface FrameStack {
-  undo: PixelBuffer[]
-  redo: PixelBuffer[]
-}
+type PixelEntry = { kind: 'pixel'; layerId: string; frameIdx: number; snapshot: PixelBuffer }
+type LayersEntry = { kind: 'layers'; snapshot: Layer[]; activeId: string }
+type HistoryEntry = PixelEntry | LayersEntry
 
-function emptyStack(): FrameStack {
-  return { undo: [], redo: [] }
+function deepCopyLayers(layers: Layer[]): Layer[] {
+  return layers.map(l => ({ ...l, frames: l.frames.map(f => f.slice() as PixelBuffer) }))
 }
 
 export function useHistory() {
-  // One stack per frame slot
-  const stacksRef = useRef<FrameStack[]>(
-    Array.from({ length: MAX_FRAMES }, emptyStack),
-  )
+  const undoRef = useRef<HistoryEntry[]>([])
+  const redoRef = useRef<HistoryEntry[]>([])
 
-  const pushHistory = useCallback((frameIndex: number, buffer: PixelBuffer) => {
-    const stack = stacksRef.current[frameIndex]
-    stack.undo.push(buffer.slice() as PixelBuffer)
-    if (stack.undo.length > MAX_HISTORY) stack.undo.shift()
-    stack.redo = []
+  const pushPixel = useCallback((layerId: string, frameIdx: number, snapshot: PixelBuffer) => {
+    undoRef.current.push({ kind: 'pixel', layerId, frameIdx, snapshot: snapshot.slice() as PixelBuffer })
+    if (undoRef.current.length > MAX_HISTORY) undoRef.current.shift()
+    redoRef.current = []
   }, [])
 
-  const undo = useCallback(
-    (frameIndex: number, current: PixelBuffer): PixelBuffer | null => {
-      const stack = stacksRef.current[frameIndex]
-      if (stack.undo.length === 0) return null
-      const prev = stack.undo.pop()!
-      stack.redo.push(current.slice() as PixelBuffer)
-      return prev
-    },
-    [],
-  )
-
-  const redo = useCallback(
-    (frameIndex: number, current: PixelBuffer): PixelBuffer | null => {
-      const stack = stacksRef.current[frameIndex]
-      if (stack.redo.length === 0) return null
-      const next = stack.redo.pop()!
-      stack.undo.push(current.slice() as PixelBuffer)
-      return next
-    },
-    [],
-  )
-
-  const initStack = useCallback((frameIndex: number) => {
-    stacksRef.current[frameIndex] = emptyStack()
+  const pushLayers = useCallback((layers: Layer[], activeId: string) => {
+    undoRef.current.push({ kind: 'layers', snapshot: deepCopyLayers(layers), activeId })
+    if (undoRef.current.length > MAX_HISTORY) undoRef.current.shift()
+    redoRef.current = []
   }, [])
 
-  const deleteStack = useCallback((frameIndex: number) => {
-    stacksRef.current.splice(frameIndex, 1)
-    stacksRef.current.push(emptyStack())
+  const undo = useCallback((
+    getCurrentPixel: (layerId: string, frameIdx: number) => PixelBuffer | null,
+    getCurrentLayers: () => Layer[],
+    getCurrentActiveId: () => string,
+  ): HistoryEntry | null => {
+    if (undoRef.current.length === 0) return null
+    const entry = undoRef.current.pop()!
+
+    if (entry.kind === 'pixel') {
+      const current = getCurrentPixel(entry.layerId, entry.frameIdx)
+      if (current === null) return null
+      redoRef.current.push({ kind: 'pixel', layerId: entry.layerId, frameIdx: entry.frameIdx, snapshot: current.slice() as PixelBuffer })
+    } else {
+      redoRef.current.push({ kind: 'layers', snapshot: deepCopyLayers(getCurrentLayers()), activeId: getCurrentActiveId() })
+    }
+
+    return entry
   }, [])
+
+  const redo = useCallback((
+    getCurrentPixel: (layerId: string, frameIdx: number) => PixelBuffer | null,
+    getCurrentLayers: () => Layer[],
+    getCurrentActiveId: () => string,
+  ): HistoryEntry | null => {
+    if (redoRef.current.length === 0) return null
+    const entry = redoRef.current.pop()!
+
+    if (entry.kind === 'pixel') {
+      const current = getCurrentPixel(entry.layerId, entry.frameIdx)
+      if (current === null) return null
+      undoRef.current.push({ kind: 'pixel', layerId: entry.layerId, frameIdx: entry.frameIdx, snapshot: current.slice() as PixelBuffer })
+    } else {
+      undoRef.current.push({ kind: 'layers', snapshot: deepCopyLayers(getCurrentLayers()), activeId: getCurrentActiveId() })
+    }
+
+    return entry
+  }, [])
+
+  const canUndo = useCallback(() => undoRef.current.length > 0, [])
+  const canRedo = useCallback(() => redoRef.current.length > 0, [])
 
   const clearAll = useCallback(() => {
-    stacksRef.current = Array.from({ length: MAX_FRAMES }, emptyStack)
+    undoRef.current = []
+    redoRef.current = []
   }, [])
 
-  const canUndo = useCallback((frameIndex: number) =>
-    stacksRef.current[frameIndex].undo.length > 0, [])
-
-  const canRedo = useCallback((frameIndex: number) =>
-    stacksRef.current[frameIndex].redo.length > 0, [])
-
-  return { pushHistory, undo, redo, initStack, deleteStack, clearAll, canUndo, canRedo }
+  return { pushPixel, pushLayers, undo, redo, canUndo, canRedo, clearAll }
 }

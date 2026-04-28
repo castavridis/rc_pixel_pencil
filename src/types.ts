@@ -3,7 +3,7 @@ export const CANVAS_H = 64
 export const MAX_FRAMES = 24
 
 export type PixelBuffer = Uint8Array   // length CANVAS_W * CANVAS_H
-export type ToolId = 'pencil' | 'eraser'
+export type ToolId = 'pencil' | 'eraser' | 'select'
 
 export interface BloomSettings {
   enabled: boolean
@@ -20,9 +20,32 @@ export interface ReferenceImageSettings {
   scale: number     // multiplier on aspect-ratio-fit size (1.0 = fits canvas)
 }
 
-// One animation — stored in Supabase and IndexedDB
-export interface Animation {
-  frames: PixelBuffer[]   // 1–24 frames
+export interface Layer {
+  id: string
+  name: string
+  visible: boolean
+  frames: PixelBuffer[]   // one buffer per animation frame
+}
+
+export interface SelectionRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface FloatingPaste {
+  buf: Uint8Array
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface Clipboard {
+  w: number
+  h: number
+  buf: Uint8Array
 }
 
 export interface Guide {

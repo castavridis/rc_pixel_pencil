@@ -1,7 +1,20 @@
-import { PixelBuffer, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, Layer, CANVAS_W, CANVAS_H } from '../types'
 import { strToU8, zipSync } from 'fflate'
 
 // ── Export ────────────────────────────────────────────────────────────────────
+
+function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
+  const out = new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
+  for (const layer of layers) {
+    if (!layer.visible) continue
+    const frame = layer.frames[frameIndex]
+    if (!frame) continue
+    for (let i = 0; i < out.length; i++) {
+      if (frame[i]) out[i] = 1
+    }
+  }
+  return out
+}
 
 export function exportSVG(frame: PixelBuffer): string {
   const rects: string[] = []
@@ -22,19 +35,21 @@ export function exportSVG(frame: PixelBuffer): string {
   ].join('\n')
 }
 
-export function downloadSVG(frame: PixelBuffer, filename = 'frame.svg'): void {
+export function downloadSVG(layers: Layer[], frameIndex: number, filename = 'frame.svg'): void {
+  const frame = compositeLayers(layers, frameIndex)
   const svg = exportSVG(frame)
   downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)
 }
 
-export function downloadFramesSVGZip(frames: PixelBuffer[]): void {
+export function downloadFramesSVGZip(layers: Layer[]): void {
+  const frameCount = layers[0]?.frames.length ?? 1
   const files: Record<string, Uint8Array> = {}
-  frames.forEach((frame, i) => {
+  for (let i = 0; i < frameCount; i++) {
+    const frame = compositeLayers(layers, i)
     const name = `frame-${String(i + 1).padStart(2, '0')}.svg`
     files[name] = strToU8(exportSVG(frame))
-  })
+  }
   const zip = zipSync(files, { level: 0 })
-  // zip is already a Uint8Array — pass its buffer to avoid SharedArrayBuffer issues
   downloadBlob(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), 'frames.zip')
 }
 

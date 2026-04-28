@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { PixelBuffer, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
+import { Layer, PixelBuffer, CANVAS_W, CANVAS_H, MAX_FRAMES } from '../types'
 
 interface TimelineProps {
-  frames: PixelBuffer[]
+  layers: Layer[]
   currentFrame: number
   isPlaying: boolean
   onSelectFrame: (i: number) => void
@@ -10,6 +10,19 @@ interface TimelineProps {
   onDeleteFrame: () => void
   onDuplicateFrame: () => void
   onTogglePlay: () => void
+}
+
+function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
+  const out = new Uint8Array(CANVAS_W * CANVAS_H) as PixelBuffer
+  for (const layer of layers) {
+    if (!layer.visible) continue
+    const frame = layer.frames[frameIndex]
+    if (!frame) continue
+    for (let i = 0; i < out.length; i++) {
+      if (frame[i]) out[i] = 1
+    }
+  }
+  return out
 }
 
 function FrameThumb({ frame, active }: { frame: PixelBuffer; active: boolean }) {
@@ -43,7 +56,7 @@ function FrameThumb({ frame, active }: { frame: PixelBuffer; active: boolean }) 
 }
 
 export function Timeline({
-  frames,
+  layers,
   currentFrame,
   isPlaying,
   onSelectFrame,
@@ -53,6 +66,7 @@ export function Timeline({
   onTogglePlay,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const frameCount = layers[0]?.frames.length ?? 1
 
   // Auto-scroll active frame into view
   useEffect(() => {
@@ -65,33 +79,36 @@ export function Timeline({
   return (
     <div className="timeline">
       <div className="timeline-frames" ref={scrollRef}>
-        {frames.map((frame, i) => (
-          <div
-            key={i}
-            className={`timeline-frame-wrap${i === currentFrame ? ' active' : ''}`}
-            onClick={() => !isPlaying && onSelectFrame(i)}
-            title={`Frame ${i + 1}`}
-          >
-            <div className="frame-number">{i + 1}</div>
-            <FrameThumb frame={frame} active={i === currentFrame} />
-          </div>
-        ))}
+        {Array.from({ length: frameCount }, (_, i) => {
+          const composite = compositeLayers(layers, i)
+          return (
+            <div
+              key={i}
+              className={`timeline-frame-wrap${i === currentFrame ? ' active' : ''}`}
+              onClick={() => !isPlaying && onSelectFrame(i)}
+              title={`Frame ${i + 1}`}
+            >
+              <div className="frame-number">{i + 1}</div>
+              <FrameThumb frame={composite} active={i === currentFrame} />
+            </div>
+          )
+        })}
       </div>
 
       <div className="timeline-controls">
         <button
           onClick={onAddFrame}
-          disabled={isPlaying || frames.length >= MAX_FRAMES}
+          disabled={isPlaying || frameCount >= MAX_FRAMES}
           title="Add frame"
         >+ Add</button>
         <button
           onClick={onDeleteFrame}
-          disabled={isPlaying || frames.length <= 1}
+          disabled={isPlaying || frameCount <= 1}
           title="Delete current frame"
         >- Del</button>
         <button
           onClick={onDuplicateFrame}
-          disabled={isPlaying || frames.length >= MAX_FRAMES}
+          disabled={isPlaying || frameCount >= MAX_FRAMES}
           title="Duplicate current frame"
         >Dup</button>
 
