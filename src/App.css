@@ -131,6 +131,17 @@ button.danger:hover:not(:disabled) {
   padding: 0 4px;
 }
 
+.pencil-sizes {
+  display: flex;
+  gap: 2px;
+  margin-left: 2px;
+}
+
+.pencil-sizes button {
+  min-width: 22px;
+  padding: 0 4px;
+}
+
 .topbar-bloom {
   gap: 6px;
 }

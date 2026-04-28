@@ -59,6 +59,7 @@ export default function App() {
     pan: state.pan,
     isPlaying: state.isPlaying,
     eraserSize: state.eraserSize,
+    pencilSize: state.pencilSize,
     guides: state.guides,
     guidesLocked: state.guidesLocked,
     referenceImage: state.referenceImage,
@@ -316,6 +317,8 @@ export default function App() {
         setTool={state.setTool}
         eraserSize={state.eraserSize}
         setEraserSize={state.setEraserSize}
+        pencilSize={state.pencilSize}
+        setPencilSize={state.setPencilSize}
         bloom={state.bloom}
         setBloom={state.setBloom}
         showGrid={state.showGrid}
@@ -363,6 +366,8 @@ export default function App() {
         onSetSmartErase={state.setSmartErase}
         mirrorX={state.mirrorX}
         onSetMirrorX={state.setMirrorX}
+        altDown={altDown}
+        onToggleAltDown={() => { altDownRef.current = !altDownRef.current; setAltDown(altDownRef.current) }}
       />
 
       <div className="canvas-area" ref={viewportRef}>
@@ -377,6 +382,7 @@ export default function App() {
           bloom={state.bloom}
           tool={state.tool}
           eraserSize={state.eraserSize}
+          pencilSize={state.pencilSize}
           isPlaying={state.isPlaying}
           guides={state.guides}
           guidesLocked={state.guidesLocked}
@@ -454,6 +460,8 @@ export default function App() {
         onDeleteFrame={state.deleteFrame}
         onDuplicateFrame={state.duplicateFrame}
         onTogglePlay={state.togglePlay}
+        pixelColor={state.pixelColor}
+        darkColor={state.darkColor}
       />
 
       <StatusBar

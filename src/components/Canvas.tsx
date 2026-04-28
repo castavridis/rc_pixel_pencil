@@ -13,6 +13,7 @@ interface CanvasProps {
   bloom: BloomSettings
   tool: ToolId
   eraserSize: number
+  pencilSize: number
   isPlaying: boolean
   guides: Guide[]
   guidesLocked: boolean
@@ -53,6 +54,7 @@ export function Canvas({
   bloom,
   tool,
   eraserSize,
+  pencilSize,
   isPlaying,
   guides,
   guidesLocked,
@@ -103,6 +105,7 @@ export function Canvas({
   const pendingDeleteGuideIdRef = useRef(pendingDeleteGuideId)
   const toolRef = useRef(tool)
   const eraserSizeRef = useRef(eraserSize)
+  const pencilSizeRef = useRef(pencilSize)
   const cursorPxRef = useRef<{ x: number; y: number } | null>(null)
   const referenceImageRef = useRef(referenceImage)
   const refImgElementRef = useRef<HTMLImageElement | null>(null)
@@ -127,6 +130,7 @@ export function Canvas({
   useEffect(() => { pendingDeleteGuideIdRef.current = pendingDeleteGuideId }, [pendingDeleteGuideId])
   useEffect(() => { toolRef.current = tool }, [tool])
   useEffect(() => { eraserSizeRef.current = eraserSize }, [eraserSize])
+  useEffect(() => { pencilSizeRef.current = pencilSize }, [pencilSize])
   useEffect(() => { pixelColorRef.current = pixelColor }, [pixelColor])
   useEffect(() => { darkColorRef.current = darkColor }, [darkColor])
   useEffect(() => { altDownRef.current = altDown }, [altDown])
@@ -367,7 +371,7 @@ export function Canvas({
             ctx.strokeRect(cur.x * z + 0.5, cur.y * z + 0.5, stamp.width * z, stamp.height * z)
           }
         } else {
-          const size = t === 'eraser' ? eraserSizeRef.current : 1
+          const size = t === 'eraser' ? eraserSizeRef.current : pencilSizeRef.current
           const half = Math.floor(size / 2)
           ctx.strokeStyle = t === 'eraser'
             ? 'rgba(255,100,100,0.8)'

@@ -10,6 +10,8 @@ interface TimelineProps {
   onDeleteFrame: () => void
   onDuplicateFrame: () => void
   onTogglePlay: () => void
+  pixelColor: string
+  darkColor: string
 }
 
 function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
@@ -19,13 +21,13 @@ function compositeLayers(layers: Layer[], frameIndex: number): PixelBuffer {
     const frame = layer.frames[frameIndex]
     if (!frame) continue
     for (let i = 0; i < out.length; i++) {
-      if (frame[i]) out[i] = 1
+      if (frame[i]) out[i] = frame[i]
     }
   }
   return out
 }
 
-function FrameThumb({ frame, active }: { frame: PixelBuffer; active: boolean }) {
+function FrameThumb({ frame, active, pixelColor, darkColor }: { frame: PixelBuffer; active: boolean; pixelColor: string; darkColor: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -34,15 +36,19 @@ function FrameThumb({ frame, active }: { frame: PixelBuffer; active: boolean }) 
     const ctx = canvas.getContext('2d')!
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
-    ctx.fillStyle = '#fff'
     for (let y = 0; y < CANVAS_H; y++) {
       for (let x = 0; x < CANVAS_W; x++) {
-        if (frame[y * CANVAS_W + x]) {
+        const v = frame[y * CANVAS_W + x]
+        if (v === 1) {
+          ctx.fillStyle = pixelColor
+          ctx.fillRect(x, y, 1, 1)
+        } else if (v === 2) {
+          ctx.fillStyle = darkColor
           ctx.fillRect(x, y, 1, 1)
         }
       }
     }
-  }, [frame])
+  }, [frame, pixelColor, darkColor])
 
   return (
     <canvas
@@ -64,6 +70,8 @@ export function Timeline({
   onDeleteFrame,
   onDuplicateFrame,
   onTogglePlay,
+  pixelColor,
+  darkColor,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const frameCount = layers[0]?.frames.length ?? 1
@@ -89,7 +97,7 @@ export function Timeline({
               title={`Frame ${i + 1}`}
             >
               <div className="frame-number">{i + 1}</div>
-              <FrameThumb frame={composite} active={i === currentFrame} />
+              <FrameThumb frame={composite} active={i === currentFrame} pixelColor={pixelColor} darkColor={darkColor} />
             </div>
           )
         })}

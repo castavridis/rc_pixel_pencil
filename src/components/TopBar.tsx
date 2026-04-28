@@ -4,12 +4,15 @@ import { downloadSVG, downloadFramesSVGZip, importSVG } from '../lib/svg'
 import { exportAnimatedGIF, exportPNG } from '../lib/gif'
 
 const ERASER_SIZES = [1, 2, 4, 8] as const
+const PENCIL_SIZES = [1, 2, 4, 8] as const
 
 interface TopBarProps {
   tool: ToolId
   setTool: (t: ToolId) => void
   eraserSize: 1 | 2 | 4 | 8
   setEraserSize: (s: 1 | 2 | 4 | 8) => void
+  pencilSize: 1 | 2 | 4 | 8
+  setPencilSize: (s: 1 | 2 | 4 | 8) => void
   bloom: BloomSettings
   setBloom: (b: BloomSettings) => void
   showGrid: boolean
@@ -57,6 +60,8 @@ interface TopBarProps {
   onSetSmartErase: (v: boolean) => void
   mirrorX: boolean
   onSetMirrorX: (v: boolean) => void
+  altDown: boolean
+  onToggleAltDown: () => void
 }
 
 export function TopBar({
@@ -64,6 +69,8 @@ export function TopBar({
   setTool,
   eraserSize,
   setEraserSize,
+  pencilSize,
+  setPencilSize,
   bloom,
   setBloom,
   showGrid,
@@ -111,6 +118,8 @@ export function TopBar({
   onSetSmartErase,
   mirrorX,
   onSetMirrorX,
+  altDown,
+  onToggleAltDown,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -211,6 +220,13 @@ export function TopBar({
               title="Smart erase: tap a filled pixel to erase it"
             >Smart&#8209;E</button>
           )}
+          {tool === 'pencil' && (
+            <button
+              className={altDown ? 'active' : ''}
+              onClick={onToggleAltDown}
+              title="Draw with dark color (Alt)"
+            >Dk</button>
+          )}
           {tool === 'select' && (
             <>
               <button onClick={onCopy} disabled={!selection} title="Copy selection (Ctrl+C)">Copy</button>
@@ -227,6 +243,18 @@ export function TopBar({
           {tool === 'stamp' && (
             <span style={{ fontSize: 10, color: 'var(--text-dim)', alignSelf: 'center' }}>
               {activeStampName ?? 'no stamp'}
+            </span>
+          )}
+          {tool === 'pencil' && (
+            <span className="pencil-sizes">
+              {PENCIL_SIZES.map(s => (
+                <button
+                  key={s}
+                  className={pencilSize === s ? 'active' : ''}
+                  onClick={() => setPencilSize(s)}
+                  title={`Brush size ${s}×${s}`}
+                >{s}</button>
+              ))}
             </span>
           )}
           {tool === 'eraser' && (

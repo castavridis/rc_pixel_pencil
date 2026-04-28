@@ -53,6 +53,7 @@ export function useAppState() {
   // ── Other UI state ────────────────────────────────────────────────────────
   const [tool, setTool] = useState<ToolId>('pencil')
   const [eraserSize, setEraserSize] = useState<1 | 2 | 4 | 8>(1)
+  const [pencilSize, setPencilSize] = useState<1 | 2 | 4 | 8>(1)
   const [smartErase, setSmartErase] = useState(false)
   const [bloom, setBloom] = useState<BloomSettings>(DEFAULT_BLOOM)
   const [zoom, setZoomState] = useState(10)
@@ -487,6 +488,8 @@ export function useAppState() {
     setTool,
     eraserSize,
     setEraserSize,
+    pencilSize,
+    setPencilSize,
     smartErase,
     setSmartErase,
     bloom,

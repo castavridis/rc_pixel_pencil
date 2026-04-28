@@ -11,6 +11,7 @@ interface UseToolsOptions {
   pan: { x: number; y: number }
   isPlaying: boolean
   eraserSize: number
+  pencilSize: number
   guides: Guide[]
   guidesLocked: boolean
   referenceImage: { locked: boolean; x: number; y: number } | null
@@ -227,7 +228,7 @@ export function useTools(opts: UseToolsOptions) {
       : tapOnFilled
         ? 0
         : (opts.isAltDown() ? 2 : 1)
-    const size = tool === 'eraser' ? opts.eraserSize : 1
+    const size = tool === 'eraser' ? opts.eraserSize : opts.pencilSize
 
     if (size > 1) drawSquare(buf, x, y, size, val)
     else drawPixel(buf, x, y, val)
@@ -351,7 +352,7 @@ export function useTools(opts: UseToolsOptions) {
       : strokeEraseRef.current
         ? 0
         : (opts.isAltDown() ? 2 : 1)
-    const size = tool === 'eraser' ? opts.eraserSize : 1
+    const size = tool === 'eraser' ? opts.eraserSize : opts.pencilSize
 
     if (lastPxRef.current) {
       if (size > 1) {
