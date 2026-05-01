@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Layer, Drawing } from '../types'
+import { Layer, Drawing, Guide } from '../types'
 import {
   isSupabaseConfigured,
   listDrawings,
@@ -12,11 +12,12 @@ import {
 
 interface LibraryPanelProps {
   layers: Layer[]
+  frameGuides: Guide[][]
   onLoad: (drawing: Drawing) => void
   onClose: () => void
 }
 
-export function LibraryPanel({ layers, onLoad, onClose }: LibraryPanelProps) {
+export function LibraryPanel({ layers, frameGuides, onLoad, onClose }: LibraryPanelProps) {
   const [drawings, setDrawings] = useState<Drawing[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -46,7 +47,7 @@ export function LibraryPanel({ layers, onLoad, onClose }: LibraryPanelProps) {
     setSaving(true)
     setError(null)
     try {
-      await saveDrawing(saveName.trim(), layers)
+      await saveDrawing(saveName.trim(), layers, frameGuides)
       setSaveName('')
       await refresh()
     } catch (e) {
@@ -66,7 +67,7 @@ export function LibraryPanel({ layers, onLoad, onClose }: LibraryPanelProps) {
     setSaving(true)
     setError(null)
     try {
-      await updateDrawing(drawing.id, drawing.name, layers)
+      await updateDrawing(drawing.id, drawing.name, layers, frameGuides)
       await refresh()
     } catch (e) {
       setError(String(e))

@@ -12,7 +12,7 @@ import { useAppState } from './hooks/useAppState'
 import { useHistory } from './hooks/useHistory'
 import { useTools } from './hooks/useTools'
 import { PixelBuffer, Drawing } from './types'
-import { drawingToLayers } from './lib/supabase'
+import { drawingToLayers, drawingToFrameGuides } from './lib/supabase'
 import './App.css'
 
 export default function App() {
@@ -154,7 +154,7 @@ export default function App() {
 
   const handleLoadFromLibrary = useCallback((drawing: Drawing) => {
     history.clearAll()
-    state.loadLayers(drawingToLayers(drawing))
+    state.loadLayers(drawingToLayers(drawing), drawingToFrameGuides(drawing))
     setCurrentDrawing(drawing)
   }, [state, history])
 
@@ -492,6 +492,7 @@ export default function App() {
       {showLibrary && (
         <LibraryPanel
           layers={state.layers}
+          frameGuides={state.frameGuides}
           onLoad={handleLoadFromLibrary}
           onClose={() => setShowLibrary(false)}
         />
@@ -500,6 +501,7 @@ export default function App() {
         <SaveDialog
           currentDrawing={currentDrawing}
           layers={state.layers}
+          frameGuides={state.frameGuides}
           onSaved={drawing => setCurrentDrawing(drawing)}
           onClose={() => setShowSaveDialog(false)}
         />

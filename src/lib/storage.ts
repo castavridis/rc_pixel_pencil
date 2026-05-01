@@ -1,4 +1,4 @@
-import { PixelBuffer, Layer, Stamp, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, Layer, Stamp, Guide, CANVAS_W, CANVAS_H } from '../types'
 import { generateId } from './uuid'
 
 const DB_NAME = 'pixel-display-studio'
@@ -7,20 +7,25 @@ const STORE_NAME = 'canvas'
 const STAMPS_STORE = 'stamps'
 const KEY = 'current'
 
+let dbCache: Promise<IDBDatabase> | null = null
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = (event) => {
-      const db = req.result
-      const oldVersion = event.oldVersion
-      if (oldVersion < 1) db.createObjectStore(STORE_NAME)
-      if (oldVersion < 2) db.createObjectStore(STAMPS_STORE)
-      db.onversionchange = () => db.close()
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-    req.onblocked = () => console.warn('DB upgrade blocked by another tab')
-  })
+  if (!dbCache) {
+    dbCache = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION)
+      req.onupgradeneeded = (event) => {
+        const db = req.result
+        const oldVersion = event.oldVersion
+        if (oldVersion < 1) db.createObjectStore(STORE_NAME)
+        if (oldVersion < 2) db.createObjectStore(STAMPS_STORE)
+        db.onversionchange = () => { db.close(); dbCache = null }
+      }
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => { dbCache = null; reject(req.error) }
+      req.onblocked = () => console.warn('DB upgrade blocked by another tab')
+    })
+  }
+  return dbCache
 }
 
 function encodeFrame(frame: PixelBuffer): string {
@@ -53,6 +58,7 @@ interface SavedState {
   version: 2
   activeLayerId: string
   layers: { id: string; name: string; visible: boolean; frames: string[] }[]
+  frameGuides?: Guide[][]
 }
 
 interface StoredStamp {
@@ -66,9 +72,10 @@ interface StoredStamp {
 export interface LoadedState {
   layers: Layer[]
   activeLayerId: string | null
+  frameGuides: Guide[][]
 }
 
-export async function saveToIndexedDB(layers: Layer[], activeLayerId: string): Promise<void> {
+export async function saveToIndexedDB(layers: Layer[], activeLayerId: string, frameGuides: Guide[][]): Promise<void> {
   const db = await openDB()
   const data: SavedState = {
     version: 2,
@@ -79,6 +86,7 @@ export async function saveToIndexedDB(layers: Layer[], activeLayerId: string): P
       visible: l.visible,
       frames: l.frames.map(encodeFrame),
     })),
+    frameGuides,
   }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -109,6 +117,7 @@ export async function loadFromIndexedDB(): Promise<LoadedState | null> {
               frames: raw.map(decodeFrame),
             }],
             activeLayerId: null,
+            frameGuides: [],
           })
           return
         }
@@ -124,6 +133,7 @@ export async function loadFromIndexedDB(): Promise<LoadedState | null> {
               frames: l.frames.map(decodeFrame),
             })),
             activeLayerId: state.activeLayerId ?? null,
+            frameGuides: state.frameGuides ?? [],
           })
           return
         }
@@ -191,27 +201,35 @@ export async function clearIndexedDB(): Promise<void> {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let pendingLayers: Layer[] | null = null
 let pendingActiveId: string | null = null
+let pendingFrameGuides: Guide[][] | null = null
 
-export function debouncedSave(layers: Layer[], activeLayerId: string): void {
+export function debouncedSave(layers: Layer[], activeLayerId: string, frameGuides: Guide[][]): void {
   pendingLayers = layers
   pendingActiveId = activeLayerId
+  pendingFrameGuides = frameGuides
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveTimer = null
+    const l = pendingLayers!
+    const id = pendingActiveId!
+    const g = pendingFrameGuides!
     pendingLayers = null
     pendingActiveId = null
-    saveToIndexedDB(layers, activeLayerId).catch(console.error)
+    pendingFrameGuides = null
+    saveToIndexedDB(l, id, g).catch(console.error)
   }, 250)
 }
 
 export function flushSave(): void {
-  if (!pendingLayers || !pendingActiveId) return
+  if (!pendingLayers || !pendingActiveId || !pendingFrameGuides) return
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
   const layers = pendingLayers
   const activeLayerId = pendingActiveId
+  const frameGuides = pendingFrameGuides
   pendingLayers = null
   pendingActiveId = null
-  saveToIndexedDB(layers, activeLayerId).catch(console.error)
+  pendingFrameGuides = null
+  saveToIndexedDB(layers, activeLayerId, frameGuides).catch(console.error)
 }
 
 let stampSaveTimer: ReturnType<typeof setTimeout> | null = null

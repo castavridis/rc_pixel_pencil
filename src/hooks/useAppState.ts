@@ -33,7 +33,7 @@ export function useAppState() {
   const setLayers = useCallback((next: Layer[]) => {
     setLayersState(next)
     layersRef.current = next
-    debouncedSave(next, activeLayerIdRef.current)
+    debouncedSave(next, activeLayerIdRef.current, frameGuidesRef.current)
   }, [])
 
   const setActiveLayerId = useCallback((id: string) => {
@@ -62,7 +62,13 @@ export function useAppState() {
   const [onionEnabled, setOnionEnabled] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [guides, setGuides] = useState<Guide[]>([])
+  const [frameGuidesState, setFrameGuidesState] = useState<Guide[][]>([])
+  const frameGuidesRef = useRef<Guide[][]>([])
+  const setFrameGuides = useCallback((next: Guide[][]) => {
+    setFrameGuidesState(next)
+    frameGuidesRef.current = next
+    debouncedSave(layersRef.current, activeLayerIdRef.current, next)
+  }, [])
   const [guidesLocked, setGuidesLocked] = useState(false)
   const [referenceImage, setReferenceImage] = useState<ReferenceImageSettings | null>(null)
   const [canvasColor, setCanvasColor] = useState('#20242d')
@@ -106,7 +112,7 @@ export function useAppState() {
 
   // ── Flush save on page hide/unload ───────────────────────────────────────
   useEffect(() => {
-    const onHide = () => { if (document.visibilityState === 'hidden') flushSave() }
+    const onHide = () => { if (document.visibilityState === 'hidden') { flushSave() } }
     document.addEventListener('visibilitychange', onHide)
     window.addEventListener('pagehide', onHide)
     return () => {
@@ -127,6 +133,10 @@ export function useAppState() {
           : loaded.layers[loaded.layers.length - 1].id
         setActiveLayerIdState(restoredActiveId)
         activeLayerIdRef.current = restoredActiveId
+        if (loaded.frameGuides.length > 0) {
+          setFrameGuidesState(loaded.frameGuides)
+          frameGuidesRef.current = loaded.frameGuides
+        }
       }
       setStampsState(loadedStamps)
       setIsLoaded(true)
@@ -164,8 +174,9 @@ export function useAppState() {
     if (frameCount() >= MAX_FRAMES) return
     const next = layersRef.current.map(l => ({ ...l, frames: [...l.frames, blankFrame()] }))
     setLayers(next)
+    setFrameGuides([...frameGuidesRef.current, []])
     setCurrentFrame(frameCount() - 1)
-  }, [setLayers, frameCount])
+  }, [setLayers, setFrameGuides, frameCount])
 
   const deleteFrame = useCallback(() => {
     const count = frameCount()
@@ -173,8 +184,9 @@ export function useAppState() {
     const fi = currentFrameRef.current
     const next = layersRef.current.map(l => ({ ...l, frames: l.frames.filter((_, i) => i !== fi) }))
     setLayers(next)
+    setFrameGuides(frameGuidesRef.current.filter((_, i) => i !== fi))
     setCurrentFrame(Math.min(fi, count - 2))
-  }, [setLayers, frameCount])
+  }, [setLayers, setFrameGuides, frameCount])
 
   const duplicateFrame = useCallback(() => {
     if (frameCount() >= MAX_FRAMES) return
@@ -188,8 +200,11 @@ export function useAppState() {
       ],
     }))
     setLayers(next)
+    const fg = frameGuidesRef.current
+    const srcGuides = (fg[fi] ?? []).map(g => ({ ...g, id: generateId() }))
+    setFrameGuides([...fg.slice(0, fi + 1), srcGuides, ...fg.slice(fi + 1)])
     setCurrentFrame(fi + 1)
-  }, [setLayers, frameCount])
+  }, [setLayers, setFrameGuides, frameCount])
 
   const clearCanvas = useCallback(() => {
     const newLayer = makeInitialLayer()
@@ -199,8 +214,9 @@ export function useAppState() {
     setActiveLayerIdState(newLayer.id)
     activeLayerIdRef.current = newLayer.id
     setCurrentFrame(0)
-    debouncedSave(next, newLayer.id)
-  }, [])
+    debouncedSave(next, newLayer.id, [])
+    setFrameGuides([])
+  }, [setFrameGuides])
 
   const loadFrames = useCallback((newFrames: PixelBuffer[]) => {
     const newId = generateId()
@@ -210,10 +226,11 @@ export function useAppState() {
     setActiveLayerIdState(newId)
     activeLayerIdRef.current = newId
     setCurrentFrame(0)
-    debouncedSave(next, newId)
-  }, [])
+    debouncedSave(next, newId, [])
+    setFrameGuides([])
+  }, [setFrameGuides])
 
-  const loadLayers = useCallback((newLayers: Layer[]) => {
+  const loadLayers = useCallback((newLayers: Layer[], newFrameGuides: Guide[][] = []) => {
     const next = newLayers.map(l => ({ ...l, frames: l.frames.map(f => f.slice() as PixelBuffer) }))
     setLayersState(next)
     layersRef.current = next
@@ -221,8 +238,9 @@ export function useAppState() {
     setActiveLayerIdState(activeId)
     activeLayerIdRef.current = activeId
     setCurrentFrame(0)
-    debouncedSave(next, activeId)
-  }, [])
+    debouncedSave(next, activeId, newFrameGuides)
+    setFrameGuides(newFrameGuides)
+  }, [setFrameGuides])
 
   // ── Layer frame helpers ───────────────────────────────────────────────────
   const setLayerFrame = useCallback((layerId: string, frameIdx: number, buf: PixelBuffer) => {
@@ -277,21 +295,35 @@ export function useAppState() {
   }, [])
 
   // ── Guide operations ──────────────────────────────────────────────────────
+  const guides = frameGuidesState[currentFrame] ?? []
+
   const addGuide = useCallback((axis: 'h' | 'v') => {
-    setGuides(g => [...g, {
+    const fi = currentFrameRef.current
+    const fg = frameGuidesRef.current
+    const next = [...fg]
+    next[fi] = [...(next[fi] ?? []), {
       id: generateId(),
       axis,
       position: axis === 'v' ? Math.floor(CANVAS_W / 2) : Math.floor(CANVAS_H / 2),
-    }])
-  }, [])
+    }]
+    setFrameGuides(next)
+  }, [setFrameGuides])
 
   const moveGuide = useCallback((id: string, position: number) => {
-    setGuides(g => g.map(x => x.id === id ? { ...x, position } : x))
-  }, [])
+    const fi = currentFrameRef.current
+    const fg = frameGuidesRef.current
+    const next = [...fg]
+    next[fi] = (next[fi] ?? []).map(x => x.id === id ? { ...x, position } : x)
+    setFrameGuides(next)
+  }, [setFrameGuides])
 
   const deleteGuide = useCallback((id: string) => {
-    setGuides(g => g.filter(x => x.id !== id))
-  }, [])
+    const fi = currentFrameRef.current
+    const fg = frameGuidesRef.current
+    const next = [...fg]
+    next[fi] = (next[fi] ?? []).filter(x => x.id !== id)
+    setFrameGuides(next)
+  }, [setFrameGuides])
 
   // ── Layer operations ──────────────────────────────────────────────────────
   const addLayer = useCallback(() => {
@@ -509,6 +541,7 @@ export function useAppState() {
     stopPlay,
     isLoaded,
     guides,
+    frameGuides: frameGuidesState,
     guidesLocked,
     setGuidesLocked,
     addGuide,

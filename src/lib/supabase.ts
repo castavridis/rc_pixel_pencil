@@ -1,4 +1,4 @@
-import { PixelBuffer, Layer, Drawing, CANVAS_W, CANVAS_H } from '../types'
+import { PixelBuffer, Layer, Drawing, Guide, CANVAS_W, CANVAS_H } from '../types'
 import { generateId } from './uuid'
 
 const SUPABASE_URL: string | undefined = import.meta.env.VITE_SUPABASE_URL
@@ -32,32 +32,63 @@ function decodeFrame(s: string): PixelBuffer {
 
 const LAYERS_PREFIX = '__layers__'
 
-function encodeLayersForSupabase(layers: Layer[]): string[] {
-  const data = layers.map(l => ({
-    id: l.id,
-    name: l.name,
-    visible: l.visible,
-    frames: l.frames.map(encodeFrame),
-  }))
-  const json = JSON.stringify(data)
+function encodeLayersForSupabase(layers: Layer[], frameGuides: Guide[][]): string[] {
+  const payload = {
+    layers: layers.map(l => ({
+      id: l.id,
+      name: l.name,
+      visible: l.visible,
+      frames: l.frames.map(encodeFrame),
+    })),
+    frameGuides,
+  }
+  const json = JSON.stringify(payload)
   const utf8 = new TextEncoder().encode(json)
   let binary = ''
   utf8.forEach(b => { binary += String.fromCharCode(b) })
   return [`${LAYERS_PREFIX}${btoa(binary)}`]
 }
 
-function decodeLayersFromSupabase(encoded: string): Layer[] {
+interface DecodedDrawing {
+  layers: Layer[]
+  frameGuides: Guide[][]
+}
+
+function decodeFromSupabase(encoded: string): DecodedDrawing {
   const binary = atob(encoded.slice(LAYERS_PREFIX.length))
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   const json = new TextDecoder().decode(bytes)
-  const data = JSON.parse(json) as { id: string; name: string; visible: boolean; frames: string[] }[]
-  return data.map(l => ({
-    id: l.id,
-    name: l.name,
-    visible: l.visible,
-    frames: l.frames.map(decodeFrame),
-  }))
+  const parsed = JSON.parse(json)
+
+  // Old format: bare array of layer objects
+  if (Array.isArray(parsed)) {
+    const data = parsed as { id: string; name: string; visible: boolean; frames: string[] }[]
+    return {
+      layers: data.map(l => ({
+        id: l.id,
+        name: l.name,
+        visible: l.visible,
+        frames: l.frames.map(decodeFrame),
+      })),
+      frameGuides: [],
+    }
+  }
+
+  // New format: { layers, frameGuides }
+  const data = parsed as {
+    layers: { id: string; name: string; visible: boolean; frames: string[] }[]
+    frameGuides?: Guide[][]
+  }
+  return {
+    layers: data.layers.map(l => ({
+      id: l.id,
+      name: l.name,
+      visible: l.visible,
+      frames: l.frames.map(decodeFrame),
+    })),
+    frameGuides: data.frameGuides ?? [],
+  }
 }
 
 function isMultiLayer(drawing: Drawing): boolean {
@@ -66,7 +97,7 @@ function isMultiLayer(drawing: Drawing): boolean {
 
 export function drawingToLayers(drawing: Drawing): Layer[] {
   if (isMultiLayer(drawing)) {
-    try { return decodeLayersFromSupabase(drawing.frames[0]) } catch {}
+    try { return decodeFromSupabase(drawing.frames[0]).layers } catch {}
   }
   return [{
     id: generateId(),
@@ -76,28 +107,23 @@ export function drawingToLayers(drawing: Drawing): Layer[] {
   }]
 }
 
+export function drawingToFrameGuides(drawing: Drawing): Guide[][] {
+  if (isMultiLayer(drawing)) {
+    try { return decodeFromSupabase(drawing.frames[0]).frameGuides } catch {}
+  }
+  return []
+}
+
 export function drawingFrameCount(drawing: Drawing): number {
   if (isMultiLayer(drawing)) {
-    try {
-      const binary = atob(drawing.frames[0].slice(LAYERS_PREFIX.length))
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      const data = JSON.parse(new TextDecoder().decode(bytes)) as { frames: string[] }[]
-      return data[0]?.frames.length ?? 1
-    } catch {}
+    try { return decodeFromSupabase(drawing.frames[0]).layers[0]?.frames.length ?? 1 } catch {}
   }
   return drawing.frames.length
 }
 
 export function drawingLayerCount(drawing: Drawing): number {
   if (isMultiLayer(drawing)) {
-    try {
-      const binary = atob(drawing.frames[0].slice(LAYERS_PREFIX.length))
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      const data = JSON.parse(new TextDecoder().decode(bytes)) as unknown[]
-      return data.length
-    } catch {}
+    try { return decodeFromSupabase(drawing.frames[0]).layers.length } catch {}
   }
   return 1
 }
@@ -126,21 +152,21 @@ export async function listDrawings(): Promise<Drawing[]> {
   return res.json()
 }
 
-export async function saveDrawing(name: string, layers: Layer[]): Promise<Drawing> {
+export async function saveDrawing(name: string, layers: Layer[], frameGuides: Guide[][]): Promise<Drawing> {
   const deviceId = getDeviceId()
   const res = await supabaseFetch('drawings', {
     method: 'POST',
-    body: JSON.stringify({ device_id: deviceId, name, frames: encodeLayersForSupabase(layers) }),
+    body: JSON.stringify({ device_id: deviceId, name, frames: encodeLayersForSupabase(layers, frameGuides) }),
   })
   if (!res.ok) throw new Error(await res.text())
   const rows = await res.json() as Drawing[]
   return rows[0]
 }
 
-export async function updateDrawing(id: string, name: string, layers: Layer[]): Promise<Drawing> {
+export async function updateDrawing(id: string, name: string, layers: Layer[], frameGuides: Guide[][]): Promise<Drawing> {
   const res = await supabaseFetch(`drawings?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ name, frames: encodeLayersForSupabase(layers), updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ name, frames: encodeLayersForSupabase(layers, frameGuides), updated_at: new Date().toISOString() }),
   })
   if (!res.ok) throw new Error(await res.text())
   const rows = await res.json() as Drawing[]

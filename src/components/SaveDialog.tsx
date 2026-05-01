@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { Drawing, Layer } from '../types'
+import { Drawing, Layer, Guide } from '../types'
 import { saveDrawing, updateDrawing, isSupabaseConfigured } from '../lib/supabase'
 
 interface SaveDialogProps {
   currentDrawing: Drawing | null
   layers: Layer[]
+  frameGuides: Guide[][]
   onSaved: (drawing: Drawing) => void
   onClose: () => void
 }
 
-export function SaveDialog({ currentDrawing, layers, onSaved, onClose }: SaveDialogProps) {
+export function SaveDialog({ currentDrawing, layers, frameGuides, onSaved, onClose }: SaveDialogProps) {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,9 +26,9 @@ export function SaveDialog({ currentDrawing, layers, onSaved, onClose }: SaveDia
     try {
       let drawing: Drawing
       if (currentDrawing) {
-        drawing = await updateDrawing(currentDrawing.id, currentDrawing.name, layers)
+        drawing = await updateDrawing(currentDrawing.id, currentDrawing.name, layers, frameGuides)
       } else {
-        drawing = await saveDrawing(name.trim(), layers)
+        drawing = await saveDrawing(name.trim(), layers, frameGuides)
       }
       onSaved(drawing)
       onClose()
